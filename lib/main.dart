@@ -1,6 +1,7 @@
 // lib/main.dart
 
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:colorbalance/src/rust/api/simple.dart';
@@ -35,10 +36,11 @@ class ColorAnalysisPage extends StatefulWidget {
 }
 
 class _ColorAnalysisPageState extends State<ColorAnalysisPage> {
-  RuleAnalysis? _ruleAnalysis; // Store the 60-30-10 analysis
+  ImageAnalysisResult? _analysisResult;
   Uint8List? _imageData;
   bool _isLoading = false;
   String? _error;
+  int? _selectedColorIndex; // To track which color to highlight
 
   Future<void> _pickAndAnalyzeImage() async {
     final picker = ImagePicker();
@@ -48,20 +50,19 @@ class _ColorAnalysisPageState extends State<ColorAnalysisPage> {
 
     setState(() {
       _isLoading = true;
-      _ruleAnalysis = null;
+      _analysisResult = null;
       _error = null;
+      _selectedColorIndex = null;
     });
 
     try {
       final imageBytes = await pickedFile.readAsBytes();
-      // Step 1: Get the initial color palette
-      final palette = await analyzeImageInMemory(imageBytes: imageBytes);
-      // Step 2: Pass the palette to our new 60-30-10 rule function
-      final analysis = await analyze603010Rule(palette: palette);
+      // Call our Rust function that returns the full analysis
+      final result = await analyzeImageInMemory(imageBytes: imageBytes);
 
       setState(() {
         _imageData = imageBytes;
-        _ruleAnalysis = analysis;
+        _analysisResult = result;
         _isLoading = false;
       });
     } catch (e) {
@@ -70,6 +71,13 @@ class _ColorAnalysisPageState extends State<ColorAnalysisPage> {
         _isLoading = false;
       });
     }
+  }
+
+  void _onColorSelected(int index) {
+    setState(() {
+      // Toggle selection: if tapping the same color, deselect it.
+      _selectedColorIndex = (_selectedColorIndex == index) ? null : index;
+    });
   }
 
   @override
@@ -83,25 +91,61 @@ class _ColorAnalysisPageState extends State<ColorAnalysisPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              if (_imageData != null)
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12.0),
-                    child: Image.memory(
-                      _imageData!,
-                      height: 250,
-                      fit: BoxFit.contain,
+              if (_imageData != null && _analysisResult != null)
+                // Use a Stack to overlay the highlight
+                Stack(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12.0),
+                        child: Image.memory(
+                          _imageData!,
+                          height: 250,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
+                    if (_selectedColorIndex != null)
+                      Positioned.fill(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12.0),
+                            child: CustomPaint(
+                              painter: HighlightPainter(
+                                result: _analysisResult!,
+                                selectedColorIndex: _selectedColorIndex!,
+                              ),
+                              child: Container(),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                )
+              else if (_imageData != null)
+                 Padding(
+                   padding: const EdgeInsets.all(16.0),
+                   child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12.0),
+                    child: Image.memory(_imageData!, height: 250, fit: BoxFit.contain),
+                   ),
+                 ),
+              
               if (_isLoading)
-                const CircularProgressIndicator()
+                const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: CircularProgressIndicator(),
+                )
               else if (_error != null)
                 Text(_error!, style: const TextStyle(color: Colors.red))
-              else if (_ruleAnalysis != null)
-                // Display the new analysis widget
-                RuleAnalysisDisplay(analysis: _ruleAnalysis!)
+              else if (_analysisResult != null)
+                PaletteDisplay(
+                  palette: _analysisResult!.palette,
+                  onColorSelected: _onColorSelected,
+                  selectedColorIndex: _selectedColorIndex,
+                )
               else
                 const Text('Select an image to analyze its color palette.'),
             ],
@@ -117,73 +161,110 @@ class _ColorAnalysisPageState extends State<ColorAnalysisPage> {
   }
 }
 
-// New widget to display the 60-30-10 rule analysis
-class RuleAnalysisDisplay extends StatelessWidget {
-  final RuleAnalysis analysis;
+// Updated palette display to be interactive
+class PaletteDisplay extends StatelessWidget {
+  final List<ColorData> palette;
+  final Function(int) onColorSelected;
+  final int? selectedColorIndex;
 
-  const RuleAnalysisDisplay({super.key, required this.analysis});
-
+  const PaletteDisplay({
+    super.key,
+    required this.palette,
+    required this.onColorSelected,
+    this.selectedColorIndex,
+  });
+  
   Color _hexToColor(String hex) {
     return Color(int.parse(hex.substring(1, 7), radix: 16) + 0xFF000000);
   }
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    return Card(
-      margin: const EdgeInsets.all(16.0),
-      elevation: 4.0,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Text(
-              analysis.summary,
-              style: textTheme.headlineSmall?.copyWith(
-                color: analysis.isBalanced ? Colors.green.shade700 : Colors.orange.shade800,
-                fontWeight: FontWeight.bold,
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: List.generate(palette.length, (index) {
+          final colorData = palette[index];
+          final color = _hexToColor(colorData.hex);
+          final isSelected = selectedColorIndex == index;
+
+          return GestureDetector(
+            onTap: () => onColorSelected(index),
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 4.0),
+              padding: const EdgeInsets.all(8.0),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isSelected ? Colors.blueAccent : Colors.transparent,
+                  width: 3,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 50, height: 50,
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Text(
+                    '${colorData.hex} (${colorData.percentage.toStringAsFixed(2)}%)',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-            _buildColorRow('Dominant (60%)', analysis.dominantHex, analysis.dominantPercentage, textTheme),
-            _buildColorRow('Secondary (30%)', analysis.secondaryHex, analysis.secondaryPercentage, textTheme),
-            _buildColorRow('Accent (10%)', analysis.accentHex, analysis.accentPercentage, textTheme),
-          ],
-        ),
+          );
+        }),
       ),
     );
+  }
+}
+
+
+// NEW: A CustomPainter to draw the highlight mask
+class HighlightPainter extends CustomPainter {
+  final ImageAnalysisResult result;
+  final int selectedColorIndex;
+
+  HighlightPainter({required this.result, required this.selectedColorIndex});
+  
+  Color _hexToColor(String hex) {
+    return Color(int.parse(hex.substring(1, 7), radix: 16) + 0xFF000000);
   }
 
-  Widget _buildColorRow(String role, String hex, double percentage, TextTheme textTheme) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: _hexToColor(hex),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey.shade300),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(role, style: textTheme.titleMedium),
-                Text(
-                  'Actual: ${percentage.toStringAsFixed(1)}%',
-                  style: textTheme.bodyMedium?.copyWith(color: Colors.grey.shade600),
-                ),
-              ],
-            ),
-          ),
-          Text(hex, style: textTheme.bodyLarge),
-        ],
-      ),
-    );
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint();
+    final selectedPaletteColorHex = result.palette[selectedColorIndex].hex;
+    final highlightColor = _hexToColor(selectedPaletteColorHex).withOpacity(0.7);
+
+    // Create a list of points (pixels) to draw
+    final List<ui.Offset> points = [];
+    for (int y = 0; y < result.height; y++) {
+      for (int x = 0; x < result.width; x++) {
+        final index = (y * result.width + x);
+        final paletteIndex = result.pixelMap[index];
+        
+        // Check if the pixel's color is the one we want to highlight
+        if (paletteIndex == selectedColorIndex) {
+          // Scale the point from the thumbnail size to the display size
+          final scaledX = (x / result.width) * size.width;
+          final scaledY = (y / result.height) * size.height;
+          points.add(ui.Offset(scaledX, scaledY));
+        }
+      }
+    }
+    
+    paint.color = highlightColor;
+    // Draw all the points at once. Adjust strokeWidth to change pixel size.
+    canvas.drawPoints(ui.PointMode.points, points, paint..strokeWidth = 2.0);
   }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -337740349;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1835938144;
 
 // Section: executor
 
@@ -45,39 +45,6 @@ flutter_rust_bridge::frb_generated_default_handler!();
 
 // Section: wire_funcs
 
-fn wire__crate__api__simple__analyze_60_30_10_rule_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "analyze_60_30_10_rule",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_palette = <Vec<crate::api::simple::ColorData>>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse::<_, String>((move || {
-                    let output_ok = crate::api::simple::analyze_60_30_10_rule(api_palette)?;
-                    Ok(output_ok)
-                })())
-            }
-        },
-    )
-}
 fn wire__crate__api__simple__analyze_image_in_memory_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -156,13 +123,6 @@ impl SseDecode for String {
     }
 }
 
-impl SseDecode for bool {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        deserializer.cursor.read_u8().unwrap() != 0
-    }
-}
-
 impl SseDecode for crate::api::simple::ColorData {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -182,6 +142,22 @@ impl SseDecode for f32 {
     }
 }
 
+impl SseDecode for crate::api::simple::ImageAnalysisResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_palette = <Vec<crate::api::simple::ColorData>>::sse_decode(deserializer);
+        let mut var_pixelMap = <Vec<u32>>::sse_decode(deserializer);
+        let mut var_width = <u32>::sse_decode(deserializer);
+        let mut var_height = <u32>::sse_decode(deserializer);
+        return crate::api::simple::ImageAnalysisResult {
+            palette: var_palette,
+            pixel_map: var_pixelMap,
+            width: var_width,
+            height: var_height,
+        };
+    }
+}
+
 impl SseDecode for Vec<crate::api::simple::ColorData> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -189,6 +165,18 @@ impl SseDecode for Vec<crate::api::simple::ColorData> {
         let mut ans_ = vec![];
         for idx_ in 0..len_ {
             ans_.push(<crate::api::simple::ColorData>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<u32> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<u32>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -206,27 +194,10 @@ impl SseDecode for Vec<u8> {
     }
 }
 
-impl SseDecode for crate::api::simple::RuleAnalysis {
+impl SseDecode for u32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_dominantHex = <String>::sse_decode(deserializer);
-        let mut var_dominantPercentage = <f32>::sse_decode(deserializer);
-        let mut var_secondaryHex = <String>::sse_decode(deserializer);
-        let mut var_secondaryPercentage = <f32>::sse_decode(deserializer);
-        let mut var_accentHex = <String>::sse_decode(deserializer);
-        let mut var_accentPercentage = <f32>::sse_decode(deserializer);
-        let mut var_isBalanced = <bool>::sse_decode(deserializer);
-        let mut var_summary = <String>::sse_decode(deserializer);
-        return crate::api::simple::RuleAnalysis {
-            dominant_hex: var_dominantHex,
-            dominant_percentage: var_dominantPercentage,
-            secondary_hex: var_secondaryHex,
-            secondary_percentage: var_secondaryPercentage,
-            accent_hex: var_accentHex,
-            accent_percentage: var_accentPercentage,
-            is_balanced: var_isBalanced,
-            summary: var_summary,
-        };
+        deserializer.cursor.read_u32::<NativeEndian>().unwrap()
     }
 }
 
@@ -249,6 +220,13 @@ impl SseDecode for i32 {
     }
 }
 
+impl SseDecode for bool {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_u8().unwrap() != 0
+    }
+}
+
 fn pde_ffi_dispatcher_primary_impl(
     func_id: i32,
     port: flutter_rust_bridge::for_generated::MessagePort,
@@ -258,16 +236,13 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        1 => {
-            wire__crate__api__simple__analyze_60_30_10_rule_impl(port, ptr, rust_vec_len, data_len)
-        }
-        2 => wire__crate__api__simple__analyze_image_in_memory_impl(
+        1 => wire__crate__api__simple__analyze_image_in_memory_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        3 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        2 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -305,29 +280,25 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::simple::ColorData>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::simple::RuleAnalysis {
+impl flutter_rust_bridge::IntoDart for crate::api::simple::ImageAnalysisResult {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.dominant_hex.into_into_dart().into_dart(),
-            self.dominant_percentage.into_into_dart().into_dart(),
-            self.secondary_hex.into_into_dart().into_dart(),
-            self.secondary_percentage.into_into_dart().into_dart(),
-            self.accent_hex.into_into_dart().into_dart(),
-            self.accent_percentage.into_into_dart().into_dart(),
-            self.is_balanced.into_into_dart().into_dart(),
-            self.summary.into_into_dart().into_dart(),
+            self.palette.into_into_dart().into_dart(),
+            self.pixel_map.into_into_dart().into_dart(),
+            self.width.into_into_dart().into_dart(),
+            self.height.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::simple::RuleAnalysis
+    for crate::api::simple::ImageAnalysisResult
 {
 }
-impl flutter_rust_bridge::IntoIntoDart<crate::api::simple::RuleAnalysis>
-    for crate::api::simple::RuleAnalysis
+impl flutter_rust_bridge::IntoIntoDart<crate::api::simple::ImageAnalysisResult>
+    for crate::api::simple::ImageAnalysisResult
 {
-    fn into_into_dart(self) -> crate::api::simple::RuleAnalysis {
+    fn into_into_dart(self) -> crate::api::simple::ImageAnalysisResult {
         self
     }
 }
@@ -336,13 +307,6 @@ impl SseEncode for String {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Vec<u8>>::sse_encode(self.into_bytes(), serializer);
-    }
-}
-
-impl SseEncode for bool {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        serializer.cursor.write_u8(self as _).unwrap();
     }
 }
 
@@ -361,12 +325,32 @@ impl SseEncode for f32 {
     }
 }
 
+impl SseEncode for crate::api::simple::ImageAnalysisResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<crate::api::simple::ColorData>>::sse_encode(self.palette, serializer);
+        <Vec<u32>>::sse_encode(self.pixel_map, serializer);
+        <u32>::sse_encode(self.width, serializer);
+        <u32>::sse_encode(self.height, serializer);
+    }
+}
+
 impl SseEncode for Vec<crate::api::simple::ColorData> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::simple::ColorData>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<u32> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <u32>::sse_encode(item, serializer);
         }
     }
 }
@@ -381,17 +365,10 @@ impl SseEncode for Vec<u8> {
     }
 }
 
-impl SseEncode for crate::api::simple::RuleAnalysis {
+impl SseEncode for u32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <String>::sse_encode(self.dominant_hex, serializer);
-        <f32>::sse_encode(self.dominant_percentage, serializer);
-        <String>::sse_encode(self.secondary_hex, serializer);
-        <f32>::sse_encode(self.secondary_percentage, serializer);
-        <String>::sse_encode(self.accent_hex, serializer);
-        <f32>::sse_encode(self.accent_percentage, serializer);
-        <bool>::sse_encode(self.is_balanced, serializer);
-        <String>::sse_encode(self.summary, serializer);
+        serializer.cursor.write_u32::<NativeEndian>(self).unwrap();
     }
 }
 
@@ -411,6 +388,13 @@ impl SseEncode for i32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_i32::<NativeEndian>(self).unwrap();
+    }
+}
+
+impl SseEncode for bool {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_u8(self as _).unwrap();
     }
 }
 

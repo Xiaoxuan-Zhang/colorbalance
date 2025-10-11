@@ -66,7 +66,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -337740349;
+  int get rustContentHash => -1835938144;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -77,11 +77,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
-  Future<RuleAnalysis> crateApiSimpleAnalyze603010Rule({
-    required List<ColorData> palette,
-  });
-
-  Future<List<ColorData>> crateApiSimpleAnalyzeImageInMemory({
+  Future<ImageAnalysisResult> crateApiSimpleAnalyzeImageInMemory({
     required List<int> imageBytes,
   });
 
@@ -97,40 +93,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
-  Future<RuleAnalysis> crateApiSimpleAnalyze603010Rule({
-    required List<ColorData> palette,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_list_color_data(palette, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 1,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_rule_analysis,
-          decodeErrorData: sse_decode_String,
-        ),
-        constMeta: kCrateApiSimpleAnalyze603010RuleConstMeta,
-        argValues: [palette],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiSimpleAnalyze603010RuleConstMeta =>
-      const TaskConstMeta(
-        debugName: "analyze_60_30_10_rule",
-        argNames: ["palette"],
-      );
-
-  @override
-  Future<List<ColorData>> crateApiSimpleAnalyzeImageInMemory({
+  Future<ImageAnalysisResult> crateApiSimpleAnalyzeImageInMemory({
     required List<int> imageBytes,
   }) {
     return handler.executeNormal(
@@ -141,12 +104,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 2,
+            funcId: 1,
             port: port_,
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_color_data,
+          decodeSuccessData: sse_decode_image_analysis_result,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiSimpleAnalyzeImageInMemoryConstMeta,
@@ -171,7 +134,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 3,
+            funcId: 2,
             port: port_,
           );
         },
@@ -196,12 +159,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  bool dco_decode_bool(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw as bool;
-  }
-
-  @protected
   ColorData dco_decode_color_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -220,9 +177,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ImageAnalysisResult dco_decode_image_analysis_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return ImageAnalysisResult(
+      palette: dco_decode_list_color_data(arr[0]),
+      pixelMap: dco_decode_list_prim_u_32_strict(arr[1]),
+      width: dco_decode_u_32(arr[2]),
+      height: dco_decode_u_32(arr[3]),
+    );
+  }
+
+  @protected
   List<ColorData> dco_decode_list_color_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_color_data).toList();
+  }
+
+  @protected
+  Uint32List dco_decode_list_prim_u_32_strict(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as Uint32List;
   }
 
   @protected
@@ -238,21 +215,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  RuleAnalysis dco_decode_rule_analysis(dynamic raw) {
+  int dco_decode_u_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
-    return RuleAnalysis(
-      dominantHex: dco_decode_String(arr[0]),
-      dominantPercentage: dco_decode_f_32(arr[1]),
-      secondaryHex: dco_decode_String(arr[2]),
-      secondaryPercentage: dco_decode_f_32(arr[3]),
-      accentHex: dco_decode_String(arr[4]),
-      accentPercentage: dco_decode_f_32(arr[5]),
-      isBalanced: dco_decode_bool(arr[6]),
-      summary: dco_decode_String(arr[7]),
-    );
+    return raw as int;
   }
 
   @protected
@@ -275,12 +240,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  bool sse_decode_bool(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getUint8() != 0;
-  }
-
-  @protected
   ColorData sse_decode_color_data(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_hex = sse_decode_String(deserializer);
@@ -295,6 +254,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ImageAnalysisResult sse_decode_image_analysis_result(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_palette = sse_decode_list_color_data(deserializer);
+    var var_pixelMap = sse_decode_list_prim_u_32_strict(deserializer);
+    var var_width = sse_decode_u_32(deserializer);
+    var var_height = sse_decode_u_32(deserializer);
+    return ImageAnalysisResult(
+      palette: var_palette,
+      pixelMap: var_pixelMap,
+      width: var_width,
+      height: var_height,
+    );
+  }
+
+  @protected
   List<ColorData> sse_decode_list_color_data(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -304,6 +280,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ans_.add(sse_decode_color_data(deserializer));
     }
     return ans_;
+  }
+
+  @protected
+  Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getUint32List(len_);
   }
 
   @protected
@@ -321,26 +304,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  RuleAnalysis sse_decode_rule_analysis(SseDeserializer deserializer) {
+  int sse_decode_u_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_dominantHex = sse_decode_String(deserializer);
-    var var_dominantPercentage = sse_decode_f_32(deserializer);
-    var var_secondaryHex = sse_decode_String(deserializer);
-    var var_secondaryPercentage = sse_decode_f_32(deserializer);
-    var var_accentHex = sse_decode_String(deserializer);
-    var var_accentPercentage = sse_decode_f_32(deserializer);
-    var var_isBalanced = sse_decode_bool(deserializer);
-    var var_summary = sse_decode_String(deserializer);
-    return RuleAnalysis(
-      dominantHex: var_dominantHex,
-      dominantPercentage: var_dominantPercentage,
-      secondaryHex: var_secondaryHex,
-      secondaryPercentage: var_secondaryPercentage,
-      accentHex: var_accentHex,
-      accentPercentage: var_accentPercentage,
-      isBalanced: var_isBalanced,
-      summary: var_summary,
-    );
+    return deserializer.buffer.getUint32();
   }
 
   @protected
@@ -361,15 +327,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_String(String self, SseSerializer serializer) {
+  bool sse_decode_bool(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_list_prim_u_8_strict(utf8.encoder.convert(self), serializer);
+    return deserializer.buffer.getUint8() != 0;
   }
 
   @protected
-  void sse_encode_bool(bool self, SseSerializer serializer) {
+  void sse_encode_String(String self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putUint8(self ? 1 : 0);
+    sse_encode_list_prim_u_8_strict(utf8.encoder.convert(self), serializer);
   }
 
   @protected
@@ -386,6 +352,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_image_analysis_result(
+    ImageAnalysisResult self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_color_data(self.palette, serializer);
+    sse_encode_list_prim_u_32_strict(self.pixelMap, serializer);
+    sse_encode_u_32(self.width, serializer);
+    sse_encode_u_32(self.height, serializer);
+  }
+
+  @protected
   void sse_encode_list_color_data(
     List<ColorData> self,
     SseSerializer serializer,
@@ -395,6 +373,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     for (final item in self) {
       sse_encode_color_data(item, serializer);
     }
+  }
+
+  @protected
+  void sse_encode_list_prim_u_32_strict(
+    Uint32List self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putUint32List(self);
   }
 
   @protected
@@ -420,16 +408,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_rule_analysis(RuleAnalysis self, SseSerializer serializer) {
+  void sse_encode_u_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.dominantHex, serializer);
-    sse_encode_f_32(self.dominantPercentage, serializer);
-    sse_encode_String(self.secondaryHex, serializer);
-    sse_encode_f_32(self.secondaryPercentage, serializer);
-    sse_encode_String(self.accentHex, serializer);
-    sse_encode_f_32(self.accentPercentage, serializer);
-    sse_encode_bool(self.isBalanced, serializer);
-    sse_encode_String(self.summary, serializer);
+    serializer.buffer.putUint32(self);
   }
 
   @protected
@@ -447,5 +428,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_i_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putInt32(self);
+  }
+
+  @protected
+  void sse_encode_bool(bool self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint8(self ? 1 : 0);
   }
 }

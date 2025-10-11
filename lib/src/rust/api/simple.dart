@@ -8,13 +8,11 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `fmt`, `fmt`
 
-Future<List<ColorData>> analyzeImageInMemory({required List<int> imageBytes}) =>
-    RustLib.instance.api.crateApiSimpleAnalyzeImageInMemory(
-      imageBytes: imageBytes,
-    );
-
-Future<RuleAnalysis> analyze603010Rule({required List<ColorData> palette}) =>
-    RustLib.instance.api.crateApiSimpleAnalyze603010Rule(palette: palette);
+Future<ImageAnalysisResult> analyzeImageInMemory({
+  required List<int> imageBytes,
+}) => RustLib.instance.api.crateApiSimpleAnalyzeImageInMemory(
+  imageBytes: imageBytes,
+);
 
 class ColorData {
   final String hex;
@@ -34,49 +32,30 @@ class ColorData {
           percentage == other.percentage;
 }
 
-class RuleAnalysis {
-  final String dominantHex;
-  final double dominantPercentage;
-  final String secondaryHex;
-  final double secondaryPercentage;
-  final String accentHex;
-  final double accentPercentage;
-  final bool isBalanced;
-  final String summary;
+class ImageAnalysisResult {
+  final List<ColorData> palette;
+  final Uint32List pixelMap;
+  final int width;
+  final int height;
 
-  const RuleAnalysis({
-    required this.dominantHex,
-    required this.dominantPercentage,
-    required this.secondaryHex,
-    required this.secondaryPercentage,
-    required this.accentHex,
-    required this.accentPercentage,
-    required this.isBalanced,
-    required this.summary,
+  const ImageAnalysisResult({
+    required this.palette,
+    required this.pixelMap,
+    required this.width,
+    required this.height,
   });
 
   @override
   int get hashCode =>
-      dominantHex.hashCode ^
-      dominantPercentage.hashCode ^
-      secondaryHex.hashCode ^
-      secondaryPercentage.hashCode ^
-      accentHex.hashCode ^
-      accentPercentage.hashCode ^
-      isBalanced.hashCode ^
-      summary.hashCode;
+      palette.hashCode ^ pixelMap.hashCode ^ width.hashCode ^ height.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is RuleAnalysis &&
+      other is ImageAnalysisResult &&
           runtimeType == other.runtimeType &&
-          dominantHex == other.dominantHex &&
-          dominantPercentage == other.dominantPercentage &&
-          secondaryHex == other.secondaryHex &&
-          secondaryPercentage == other.secondaryPercentage &&
-          accentHex == other.accentHex &&
-          accentPercentage == other.accentPercentage &&
-          isBalanced == other.isBalanced &&
-          summary == other.summary;
+          palette == other.palette &&
+          pixelMap == other.pixelMap &&
+          width == other.width &&
+          height == other.height;
 }
