@@ -5,7 +5,7 @@ use std::path::Path;
 use std::fs;
 
 // Import everything we need from our generic library
-use color_balance::core::{
+use rust_lib_colorbalance::core::{
     load_image_from_path, run_analysis, generate_output_path, ColorCluster
 };
 

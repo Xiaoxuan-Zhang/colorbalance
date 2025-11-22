@@ -1,3 +1,9 @@
-rust_input: crate::api
+# 1. Root: Where your Cargo.toml lives
 rust_root: rust/
+
+# 2. Input: The specific module(s) to generate bindings for.
+# "crate" refers to lib.rs, and "::api" refers to the "pub mod api" inside it.
+rust_input: "crate::api"
+
+# 3. Output: Where Dart code goes (Standard)
 dart_output: lib/src/rust

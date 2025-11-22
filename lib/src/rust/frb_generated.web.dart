@@ -6,7 +6,7 @@
 // Static analysis wrongly picks the IO variant, thus ignore this
 // ignore_for_file: argument_type_not_assignable
 
-import 'api/simple.dart';
+import 'api.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';
@@ -21,22 +21,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   });
 
   @protected
-  String dco_decode_String(dynamic raw);
+  AnyhowException dco_decode_AnyhowException(dynamic raw);
 
   @protected
-  ColorData dco_decode_color_data(dynamic raw);
+  String dco_decode_String(dynamic raw);
 
   @protected
   double dco_decode_f_32(dynamic raw);
 
   @protected
-  ImageAnalysisResult dco_decode_image_analysis_result(dynamic raw);
-
-  @protected
-  List<ColorData> dco_decode_list_color_data(dynamic raw);
-
-  @protected
-  Uint32List dco_decode_list_prim_u_32_strict(dynamic raw);
+  List<MobileColor> dco_decode_list_mobile_color(dynamic raw);
 
   @protected
   List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
@@ -45,33 +39,28 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  MobileColor dco_decode_mobile_color(dynamic raw);
+
+  @protected
+  MobileResult dco_decode_mobile_result(dynamic raw);
+
+  @protected
   int dco_decode_u_32(dynamic raw);
 
   @protected
   int dco_decode_u_8(dynamic raw);
 
   @protected
-  void dco_decode_unit(dynamic raw);
+  AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
-  ColorData sse_decode_color_data(SseDeserializer deserializer);
-
-  @protected
   double sse_decode_f_32(SseDeserializer deserializer);
 
   @protected
-  ImageAnalysisResult sse_decode_image_analysis_result(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  List<ColorData> sse_decode_list_color_data(SseDeserializer deserializer);
-
-  @protected
-  Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer);
+  List<MobileColor> sse_decode_list_mobile_color(SseDeserializer deserializer);
 
   @protected
   List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
@@ -80,13 +69,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  MobileColor sse_decode_mobile_color(SseDeserializer deserializer);
+
+  @protected
+  MobileResult sse_decode_mobile_result(SseDeserializer deserializer);
+
+  @protected
   int sse_decode_u_32(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_8(SseDeserializer deserializer);
-
-  @protected
-  void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
   int sse_decode_i_32(SseDeserializer deserializer);
@@ -95,29 +87,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
-  void sse_encode_String(String self, SseSerializer serializer);
+  void sse_encode_AnyhowException(
+    AnyhowException self,
+    SseSerializer serializer,
+  );
 
   @protected
-  void sse_encode_color_data(ColorData self, SseSerializer serializer);
+  void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
 
   @protected
-  void sse_encode_image_analysis_result(
-    ImageAnalysisResult self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_color_data(
-    List<ColorData> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_prim_u_32_strict(
-    Uint32List self,
+  void sse_encode_list_mobile_color(
+    List<MobileColor> self,
     SseSerializer serializer,
   );
 
@@ -131,13 +114,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_mobile_color(MobileColor self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_mobile_result(MobileResult self, SseSerializer serializer);
+
+  @protected
   void sse_encode_u_32(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_8(int self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_unit(void self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);

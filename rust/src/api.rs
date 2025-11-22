@@ -20,12 +20,12 @@ pub struct MobileResult {
 
 // --- WRAPPER FUNCTION ---
 
-pub fn analyze_image_mobile(image_bytes: Vec<u8>, k: usize) -> Result<MobileResult> {
+pub fn analyze_image_mobile(image_bytes: Vec<u8>, k: u32) -> Result<MobileResult> {
     // 1. Adapt Input: Bytes -> DynamicImage
     let img = load_image_from_bytes(&image_bytes)?;
 
     // 2. Call Generic Engine (lib.rs)
-    let (clusters, vis_bytes) = run_analysis(img, k)?;
+    let (clusters, vis_bytes) = run_analysis(img, k as usize)?;
 
     // 3. Adapt Output: Generic Cluster -> MobileColor
     let mobile_colors = clusters.iter().map(|c| MobileColor {
