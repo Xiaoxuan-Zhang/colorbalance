@@ -1,16 +1,19 @@
 [package]
-name = "rust_lib_colorbalance"
+name = "color_balance"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib", "staticlib"]
+crate-type = ["cdylib", "rlib"] # 'rlib' allows rust-to-rust calls (for main.rs)
 
 [dependencies]
 flutter_rust_bridge = "=2.11.1"
-image = "0.24"
 color_quant = "1.1"
-anyhow = "1.0.100"
+anyhow = "1.0"
+image = { version = "0.24", default-features = false, features = ["jpeg", "png", "bmp", "default"] }
+palette = "0.7"
+kmeans_colors = "0.6"
+clap = { version = "4.4", features = ["derive"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

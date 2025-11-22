@@ -65,3 +65,14 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# python related
+__pycache__/
+*.pyc
+*venv/
+*myvenv/
+*python-version
+colorbalance.egg-info/
+colorbalance_python/*.jpeg
+colorbalance_python/*.png
+colorbalance_python/*.jpg
