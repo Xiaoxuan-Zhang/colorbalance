@@ -68,6 +68,14 @@ pub struct ProcessingResult {
     pub clusters: Vec<ColorCluster>,
 }
 
+// Holds the raw data needed for UI highlighting
+pub struct AnalysisData {
+    pub clusters: Vec<ColorCluster>,
+    pub width: u32,
+    pub height: u32,
+    pub map: Vec<u8>, // Flattened array: Pixel index -> Cluster ID
+}
+
 // --- GENERIC IMAGE LOADING ---
 
 /// Loads an image from a file path.
@@ -395,7 +403,6 @@ pub fn generate_output_path(input_path: &Path) -> PathBuf {
 }
 
 /// Generates a visualization image (PNG) from the processing results.
-///
 /// Returns the PNG file as a vector of bytes, which can be saved to disk
 /// or displayed directly in a UI.
 pub fn generate_visualization_bytes(data: &ProcessingResult) -> Result<Vec<u8>> {
@@ -490,13 +497,24 @@ pub fn generate_visualization_bytes(data: &ProcessingResult) -> Result<Vec<u8>> 
 /// A tuple containing:
 /// * `Vec<ColorCluster>` - The final sorted list of dominant colors.
 /// * `Vec<u8>` - The bytes of the generated visualization PNG.
-pub fn run_analysis(img: DynamicImage, k: usize) -> Result<(Vec<ColorCluster>, Vec<u8>)> {
-    let processed_img = preprocess_image(&img, 600, 2.0);
+pub fn run_analysis(
+    img: DynamicImage, 
+    k: usize, 
+    max_dim: Option<u32>,
+    blur_sigma: Option<f32>
+) -> Result<ProcessingResult>{
+    // 1. Preprocess (Resize & Blur)
+    let target_dim = max_dim.unwrap_or(600);
+    let target_sigma = blur_sigma.unwrap_or(2.0);
+    let processed_img = preprocess_image(&img, target_dim, target_sigma);
     let (width, height) = processed_img.dimensions();
 
+    // 2. SLIC & Clustering
     let lab_pixels = rgb_to_lab(&processed_img);
     let (labels, superpixels) = slic_segmentation(&lab_pixels, width as usize, height as usize, 300, 20.0);
     let raw_clusters = cluster_colors(&superpixels, k);
+
+    // 3. Merge & Refine
     let mut merged_clusters = merge_colors(raw_clusters, 15.0);
 
     // Create temp map to populate counts
@@ -504,24 +522,22 @@ pub fn run_analysis(img: DynamicImage, k: usize) -> Result<(Vec<ColorCluster>, V
         &labels, &superpixels, &mut merged_clusters, width as usize * height as usize
     );
 
-    // Filter and sort
+    // Filter small clusters (<3%)
     let mut final_clusters = calculate_final_clusters(&mut merged_clusters);
 
-    // Final map for visualization
+    // 4. Final Map Generation
+    // This maps every pixel to the final, filtered palette
     let final_segmentation_map = create_segmentation_map(
         &labels, &superpixels, &mut final_clusters, width as usize * height as usize
     );
 
-    let result_data = ProcessingResult {
+    // Return the RICH object
+    Ok(ProcessingResult {
         original_img: img,
         processed_img: DynamicImage::ImageRgba8(processed_img.to_rgba8()),
         segmentation_map: final_segmentation_map,
         labels,
         _superpixels: superpixels,
-        clusters: final_clusters.clone(),
-    };
-
-    let vis_bytes = generate_visualization_bytes(&result_data)?;
-
-    Ok((final_clusters, vis_bytes))
+        clusters: final_clusters,
+    })
 }

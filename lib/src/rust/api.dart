@@ -11,9 +11,13 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 Future<MobileResult> analyzeImageMobile({
   required List<int> imageBytes,
   required int k,
+  int? maxDim,
+  double? blurSigma,
 }) => RustLib.instance.api.crateApiAnalyzeImageMobile(
   imageBytes: imageBytes,
   k: k,
+  maxDim: maxDim,
+  blurSigma: blurSigma,
 );
 
 class MobileColor {
@@ -53,12 +57,23 @@ class MobileColor {
 
 class MobileResult {
   final List<MobileColor> dominantColors;
-  final Uint8List resultImage;
+  final int width;
+  final int height;
+  final Uint8List segmentationMap;
 
-  const MobileResult({required this.dominantColors, required this.resultImage});
+  const MobileResult({
+    required this.dominantColors,
+    required this.width,
+    required this.height,
+    required this.segmentationMap,
+  });
 
   @override
-  int get hashCode => dominantColors.hashCode ^ resultImage.hashCode;
+  int get hashCode =>
+      dominantColors.hashCode ^
+      width.hashCode ^
+      height.hashCode ^
+      segmentationMap.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -66,5 +81,7 @@ class MobileResult {
       other is MobileResult &&
           runtimeType == other.runtimeType &&
           dominantColors == other.dominantColors &&
-          resultImage == other.resultImage;
+          width == other.width &&
+          height == other.height &&
+          segmentationMap == other.segmentationMap;
 }

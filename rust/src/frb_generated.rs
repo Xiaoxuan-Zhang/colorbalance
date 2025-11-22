@@ -69,11 +69,18 @@ fn wire__crate__api__analyze_image_mobile_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_image_bytes = <Vec<u8>>::sse_decode(&mut deserializer);
             let api_k = <u32>::sse_decode(&mut deserializer);
+            let api_max_dim = <Option<u32>>::sse_decode(&mut deserializer);
+            let api_blur_sigma = <Option<f32>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || {
-                        let output_ok = crate::api::analyze_image_mobile(api_image_bytes, api_k)?;
+                        let output_ok = crate::api::analyze_image_mobile(
+                            api_image_bytes,
+                            api_k,
+                            api_max_dim,
+                            api_blur_sigma,
+                        )?;
                         Ok(output_ok)
                     })(),
                 )
@@ -153,11 +160,37 @@ impl SseDecode for crate::api::MobileResult {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_dominantColors = <Vec<crate::api::MobileColor>>::sse_decode(deserializer);
-        let mut var_resultImage = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_width = <u32>::sse_decode(deserializer);
+        let mut var_height = <u32>::sse_decode(deserializer);
+        let mut var_segmentationMap = <Vec<u8>>::sse_decode(deserializer);
         return crate::api::MobileResult {
             dominant_colors: var_dominantColors,
-            result_image: var_resultImage,
+            width: var_width,
+            height: var_height,
+            segmentation_map: var_segmentationMap,
         };
+    }
+}
+
+impl SseDecode for Option<f32> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<f32>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<u32> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<u32>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
     }
 }
 
@@ -241,7 +274,9 @@ impl flutter_rust_bridge::IntoDart for crate::api::MobileResult {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.dominant_colors.into_into_dart().into_dart(),
-            self.result_image.into_into_dart().into_dart(),
+            self.width.into_into_dart().into_dart(),
+            self.height.into_into_dart().into_dart(),
+            self.segmentation_map.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -309,7 +344,29 @@ impl SseEncode for crate::api::MobileResult {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Vec<crate::api::MobileColor>>::sse_encode(self.dominant_colors, serializer);
-        <Vec<u8>>::sse_encode(self.result_image, serializer);
+        <u32>::sse_encode(self.width, serializer);
+        <u32>::sse_encode(self.height, serializer);
+        <Vec<u8>>::sse_encode(self.segmentation_map, serializer);
+    }
+}
+
+impl SseEncode for Option<f32> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <f32>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<u32> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <u32>::sse_encode(value, serializer);
+        }
     }
 }
 

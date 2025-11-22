@@ -6,7 +6,11 @@ use std::fs;
 
 // Import everything we need from our generic library
 use rust_lib_colorbalance::core::{
-    load_image_from_path, run_analysis, generate_output_path, ColorCluster
+    load_image_from_path,
+    run_analysis,
+    generate_visualization_bytes,
+    generate_output_path,
+    ColorCluster
 };
 
 #[derive(Parser, Debug)]
@@ -17,6 +21,14 @@ struct Args {
 
     #[arg(short, long, default_value_t = 5)]
     k: usize,
+
+    // Maximum dimension to resize image to for analysis
+    #[arg(long, default_value_t = 600)]
+    max_dim: u32,
+
+    // Blur sigma for noise reduction
+    #[arg(long, default_value_t = 2.0)]
+    blur_sigma: f32,
 }
 
 fn main() -> Result<()> {
@@ -31,8 +43,8 @@ fn main() -> Result<()> {
 
     // 2. Run Generic Analysis Pipeline
     // This handles Preprocess -> SLIC -> Cluster -> Merge -> Map -> Vis
-    println!("Running pipeline (k={})...", args.k);
-    let (final_clusters, vis_bytes) = run_analysis(img, args.k)?;
+    println!("Running pipeline (k={}, max_dim={}, sigma={})...", args.k, args.max_dim, args.blur_sigma);
+    let result = run_analysis(img, args.k, Some(args.max_dim), Some(args.blur_sigma))?;
 
     // 3. Print Report (CLI Specific Duty)
     // The library gave us the data, we decide how to format it for the user here.
@@ -41,7 +53,7 @@ fn main() -> Result<()> {
     let tolerance = 8.0;
     let labels = ["Dominant ", "Secondary", "Accent   "];
 
-    let mut top3 = final_clusters.iter().take(3).cloned().collect::<Vec<_>>();
+    let mut top3 = result.clusters.iter().take(3).cloned().collect::<Vec<_>>();
     while top3.len() < 3 {
         top3.push(ColorCluster { 
             lab: Lab::new(0.0,0.0,0.0), count: 0, percentage: 0.0, hex: "#000000".to_string(), rgba: [0,0,0,255]
@@ -55,9 +67,12 @@ fn main() -> Result<()> {
     }
 
     // 4. Save Visualization
+    println!("\nGenerating result image...");
     let output_path = generate_output_path(file_path);
-    println!("\nSaving visualization to: {:?}", output_path);
+    let vis_bytes = generate_visualization_bytes(&result)?;
+
     fs::write(&output_path, vis_bytes)?;
+    println!("Saved visualization to: {:?}", output_path);
 
     Ok(())
 }
