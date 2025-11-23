@@ -1,9 +1,26 @@
+import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:image/image.dart' as img_lib; // For generating the mask
+import 'package:path_provider/path_provider.dart';
+import 'package:gallery_saver/gallery_saver.dart';
+
+// --- RUST BRIDGE IMPORTS ---
 import 'src/rust/frb_generated.dart';
 import 'src/rust/api.dart';
+
+// --- GLOBAL CONFIGURATION ---
+const int kAnalysisMaxDim = 600;      
+const int kColorClusters = 5;         
+const double kGlowBlurSigma = 30.0;   
+const double kCoreBlurSigma = 5.0;    
+const int kEdgeThickness = 3;         
+const int kBackgroundDimAlpha = 180;  
 
 Future<void> main() async {
   await RustLib.init();
@@ -17,17 +34,19 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      title: 'ColorBalance',
       theme: ThemeData(
         useMaterial3: true,
-        colorSchemeSeed: Colors.teal,
-        brightness: Brightness.dark, // Dark mode looks better for color tools
+        brightness: Brightness.dark,
+        colorSchemeSeed: Colors.cyanAccent,
+        scaffoldBackgroundColor: Colors.black,
       ),
       home: const HomeScreen(),
     );
   }
 }
 
-// --- SCREEN 1: The Picker ---
+// --- SCREEN 1: HOME ---
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -49,32 +68,37 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       final bytes = await image.readAsBytes();
+      
+      final decodedImage = await decodeImageFromList(bytes);
+      final originalWidth = decodedImage.width.toDouble();
+      final originalHeight = decodedImage.height.toDouble();
 
-      // Call Rust!
-      // We use the defaults (maxDim=600, sigma=2.0) by passing null
       final result = await analyzeImageMobile(
         imageBytes: bytes, 
-        k: 5, 
-        maxDim: 600, // Optional: Override Rust default
-        blurSigma: null // Optional: Use Rust default (2.0)
+        k: kColorClusters, 
+        maxDim: kAnalysisMaxDim, 
+        blurSigma: null 
       );
       
       if (mounted) {
-        // Navigate to the Inspector View
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => ColorInspectorScreen(
-              originalBytes: bytes,
+            builder: (_) => InspectorScreen(
+              originalBytes: bytes, 
               result: result,
+              imageWidth: originalWidth,
+              imageHeight: originalHeight,
             ),
           ),
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e"))
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -90,19 +114,16 @@ class _HomeScreenState extends State<HomeScreen> {
             : Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.color_lens, size: 80, color: Colors.teal),
+                  const Icon(Icons.auto_awesome, size: 80, color: Colors.white24),
                   const SizedBox(height: 20),
-                  const Text(
-                    "Analyze your photo's palette",
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
-                  ),
+                  const Text("Discover your palette", style: TextStyle(color: Colors.grey)),
                   const SizedBox(height: 40),
                   FilledButton.icon(
                     onPressed: _pickImage,
-                    icon: const Icon(Icons.add_photo_alternate),
-                    label: const Text("Pick Image from Gallery"),
+                    icon: const Icon(Icons.add_a_photo),
+                    label: const Text("Analyze Photo"),
                     style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
                     ),
                   ),
                 ],
@@ -112,206 +133,391 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// --- SCREEN 2: The Interactive Inspector ---
+// --- SCREEN 2: INSPECTOR ---
 
-class ColorInspectorScreen extends StatefulWidget {
+class InspectorScreen extends StatefulWidget {
   final Uint8List originalBytes;
   final MobileResult result;
+  final double imageWidth;
+  final double imageHeight;
 
-  const ColorInspectorScreen({
+  const InspectorScreen({
     super.key,
     required this.originalBytes,
     required this.result,
+    required this.imageWidth,
+    required this.imageHeight,
   });
 
   @override
-  State<ColorInspectorScreen> createState() => _ColorInspectorScreenState();
+  State<InspectorScreen> createState() => _InspectorScreenState();
 }
 
-class _ColorInspectorScreenState extends State<ColorInspectorScreen> {
-  int? _selectedIndex; // Null = Show Original, Int = Show Specific Color
-  Uint8List? _maskBytes; // The overlay image
-  bool _isGeneratingMask = false;
+class _InspectorScreenState extends State<InspectorScreen> with SingleTickerProviderStateMixin {
+  int? _selectedIndex;
+  ui.Image? _dimmingImage;
+  ui.Image? _edgeImage;
+  bool _processing = false;
+  
+  late AnimationController _glowController;
+  final GlobalKey _paletteKey = GlobalKey(); 
 
   @override
   void initState() {
     super.initState();
-    // Select the dominant color (index 0) by default, or start null
-    _selectedIndex = null; 
+    _glowController = AnimationController(
+      vsync: this, 
+      duration: const Duration(milliseconds: 2000)
+    )..repeat(reverse: true);
   }
 
-  /// Generates a semi-transparent overlay where:
-  /// - Pixels matching [targetIndex] are TRANSPARENT (Original photo shows through)
-  /// - All other pixels are BLACK/DIMMED
-  Future<void> _generateMask(int targetIndex) async {
-    setState(() => _isGeneratingMask = true);
+  @override
+  void dispose() {
+    _glowController.dispose();
+    super.dispose();
+  }
 
-    // Run this in a microtask/compute to avoid freezing UI (though 600px is fast)
-    // For simplicity here, we do it inline, but 'compute' is better for production.
-    
-    final width = widget.result.width.toInt();
-    final height = widget.result.height.toInt();
-    final map = widget.result.segmentationMap;
-    
-    // Create a blank image buffer
-    final maskImage = img_lib.Image(width: width, height: height, numChannels: 4);
-
-    // Loop through the Rust segmentation map
-    for (int i = 0; i < map.length; i++) {
-      // x and y are implicit from index i
-      final x = i % width;
-      final y = i ~/ width;
-
-      if (map[i] == targetIndex) {
-        // MATCH: Fully Transparent (Show the photo)
-        maskImage.setPixelRgba(x, y, 0, 0, 0, 0);
-      } else {
-        // NO MATCH: Dark Overlay (Dim the photo)
-        // R=0, G=0, B=0, A=200 (out of 255)
-        maskImage.setPixelRgba(x, y, 0, 0, 0, 200); 
-      }
+  Future<void> _selectColor(int index) async {
+    if (_selectedIndex == index) {
+      setState(() {
+        _selectedIndex = null;
+        _dimmingImage = null;
+        _edgeImage = null;
+      });
+      return;
     }
 
-    // Encode to PNG so Flutter's Image.memory can display it
-    final pngBytes = img_lib.encodePng(maskImage);
+    setState(() {
+      _selectedIndex = index;
+      _processing = true;
+    });
+
+    final request = {
+      'width': widget.result.width.toInt(),
+      'height': widget.result.height.toInt(),
+      'map': widget.result.segmentationMap,
+      'target': index,
+      'thickness': kEdgeThickness,
+      'dimAlpha': kBackgroundDimAlpha,
+    };
+
+    final layers = await compute(generateLayers, request);
+
+    final dimImg = await _createImageFromPixels(
+      layers['dimming']!, 
+      widget.result.width.toInt(), 
+      widget.result.height.toInt()
+    );
+    
+    final edgeImg = await _createImageFromPixels(
+      layers['edges']!, 
+      widget.result.width.toInt(), 
+      widget.result.height.toInt()
+    );
 
     if (mounted) {
       setState(() {
-        _maskBytes = pngBytes;
-        _isGeneratingMask = false;
+        _dimmingImage = dimImg;
+        _edgeImage = edgeImg;
+        _processing = false;
       });
     }
   }
 
-  void _onColorTap(int index) {
-    if (_selectedIndex == index) {
-      // Deselect
-      setState(() {
-        _selectedIndex = null;
-        _maskBytes = null;
-      });
-    } else {
-      // Select new
-      setState(() => _selectedIndex = index);
-      _generateMask(index);
-    }
+  Future<ui.Image> _createImageFromPixels(Uint8List pixels, int width, int height) {
+    final Completer<ui.Image> completer = Completer();
+    ui.decodeImageFromPixels(
+      pixels, width, height, ui.PixelFormat.rgba8888, 
+      (img) => completer.complete(img),
+    );
+    return completer.future;
+  }
+
+  Future<void> _savePalette() async {
+    try {
+      RenderRepaintBoundary boundary = 
+          _paletteKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+      ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      final buffer = byteData!.buffer.asUint8List();
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/palette_${DateTime.now().millisecondsSinceEpoch}.png');
+      await file.writeAsBytes(buffer);
+      await GallerySaver.saveImage(file.path);
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Saved!")));
+    } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
-    // Grab the currently selected color data for the header
-    final activeColor = _selectedIndex != null 
+    final selectedColorData = _selectedIndex != null 
         ? widget.result.dominantColors[_selectedIndex!] 
         : null;
+    
+    final uiColor = selectedColorData != null
+        ? Color.fromARGB(255, selectedColorData.red, selectedColorData.green, selectedColorData.blue)
+        : Colors.white;
+
+    final coreColor = Colors.white.withOpacity(0.8);
 
     return Scaffold(
       backgroundColor: Colors.black,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        title: activeColor == null 
-          ? const Text("Original Image")
-          : Row(
-              children: [
-                Container(
-                  width: 20, height: 20,
-                  decoration: BoxDecoration(
-                    color: Color.fromARGB(255, activeColor.red, activeColor.green, activeColor.blue),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white)
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.download), 
+            onPressed: _savePalette,
+          )
+        ],
+      ),
+      // FIX: We use a Stack here so the Spinner floats ON TOP of the layout
+      // instead of inserting itself INTO the layout.
+      body: Stack(
+        children: [
+          // THE MAIN LAYOUT
+          Column(
+            children: [
+              // 1. IMAGE AREA
+              Expanded(
+                child: Center(
+                  child: InteractiveViewer(
+                    maxScale: 5.0,
+                    child: AspectRatio(
+                      aspectRatio: widget.imageWidth / widget.imageHeight,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          // 1A. Original Image
+                          Image.memory(widget.originalBytes, fit: BoxFit.fill),
+
+                          // 1B. Dimming Mask
+                          if (_dimmingImage != null)
+                            RawImage(image: _dimmingImage!, fit: BoxFit.fill),
+
+                          // 1C. Neon Edges
+                          if (_edgeImage != null)
+                            AnimatedBuilder(
+                              animation: _glowController,
+                              builder: (_, __) {
+                                final glowOpacity = 0.4 + (_glowController.value * 0.6);
+                                return Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    Opacity(
+                                      opacity: glowOpacity,
+                                      child: ImageFiltered(
+                                        imageFilter: ui.ImageFilter.blur(sigmaX: kGlowBlurSigma, sigmaY: kGlowBlurSigma),
+                                        child: ColorFiltered(
+                                          colorFilter: ColorFilter.mode(uiColor, BlendMode.srcATop),
+                                          child: RawImage(image: _edgeImage!, fit: BoxFit.fill),
+                                        ),
+                                      ),
+                                    ),
+                                    Opacity(
+                                      opacity: 0.9,
+                                      child: ImageFiltered(
+                                        imageFilter: ui.ImageFilter.blur(sigmaX: kCoreBlurSigma, sigmaY: kCoreBlurSigma),
+                                        child: ColorFiltered(
+                                          colorFilter: ColorFilter.mode(coreColor, BlendMode.srcATop),
+                                          child: RawImage(image: _edgeImage!, fit: BoxFit.fill),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Text("${activeColor.percentage.toStringAsFixed(1)}% Coverage"),
-              ],
-            ),
-      ),
-      body: Column(
-        children: [
-          // --- 1. THE CANVAS ---
-          Expanded(
-            child: Center(
-              child: Stack(
-                fit: StackFit.loose,
-                alignment: Alignment.center,
-                children: [
-                  // Layer A: Original Image
-                  Image.memory(
-                    widget.originalBytes,
-                    fit: BoxFit.contain,
-                  ),
-
-                  // Layer B: The Interactive Mask
-                  // Only show if we have a mask and we aren't currently generating a new one
-                  if (_maskBytes != null && !_isGeneratingMask)
-                    Image.memory(
-                      _maskBytes!,
-                      fit: BoxFit.contain, // Matches Layer A exactly
-                      gaplessPlayback: true,
-                      // Use low quality to give it a slight "tech/pixel" feel 
-                      // and ensure sharp boundaries on the mask
-                      filterQuality: FilterQuality.low, 
-                    ),
-                    
-                  if (_isGeneratingMask)
-                    const Center(child: CircularProgressIndicator()),
-                ],
               ),
-            ),
-          ),
 
-          // --- 2. THE PALETTE RAIL ---
-          Container(
-            height: 120,
-            padding: const EdgeInsets.only(bottom: 20, top: 10),
-            color: const Color(0xFF1A1A1A),
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              scrollDirection: Axis.horizontal,
-              itemCount: widget.result.dominantColors.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 16),
-              itemBuilder: (context, index) {
-                final c = widget.result.dominantColors[index];
-                final isSelected = _selectedIndex == index;
-                final colorObj = Color.fromARGB(255, c.red, c.green, c.blue);
-                
-                // Determine text color based on brightness
-                final textColor = colorObj.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+              // 2. HUD AREA
+              SizedBox(
+                height: 100, 
+                child: Center(
+                  child: selectedColorData != null
+                    ? TweenAnimationBuilder<double>(
+                        key: ValueKey(selectedColorData.hex), 
+                        tween: Tween(begin: 0.8, end: 1.0),
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeOutBack,
+                        builder: (context, val, _) {
+                          return Transform.scale(
+                            scale: val,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[900],
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: uiColor, width: 1),
+                                boxShadow: [BoxShadow(color: uiColor.withOpacity(0.3), blurRadius: 15)],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    "${selectedColorData.percentage.toStringAsFixed(1)}%",
+                                    style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+                                  ),
+                                  const SizedBox(width: 15),
+                                  Container(width: 1, height: 30, color: Colors.white24),
+                                  const SizedBox(width: 15),
+                                  Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text("HEX CODE", style: TextStyle(color: Colors.grey, fontSize: 9, letterSpacing: 1)),
+                                      Text(
+                                        selectedColorData.hex.toUpperCase(), 
+                                        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500)
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      )
+                    : const Text("Select a color below", style: TextStyle(color: Colors.white38, fontSize: 14)),
+                ),
+              ),
 
-                return GestureDetector(
-                  onTap: () => _onColorTap(index),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: isSelected ? 80 : 60,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: colorObj,
-                      shape: BoxShape.circle,
-                      border: isSelected ? Border.all(color: Colors.white, width: 3) : null,
-                      boxShadow: isSelected 
-                        ? [BoxShadow(color: colorObj.withOpacity(0.6), blurRadius: 15, spreadRadius: 2)] 
-                        : null,
-                    ),
+              // 3. PALETTE RAIL
+              Container(
+                color: Colors.black, 
+                child: SafeArea(
+                  top: false,
+                  child: SizedBox(
+                    height: 150, // Fixed height prevents layout shifts
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          "${c.percentage.round()}%",
-                          style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
-                        ),
-                        if (isSelected)
-                           Text(
-                            c.hex.toUpperCase(),
-                            style: TextStyle(color: textColor, fontSize: 10),
+                        const Text("PALETTE", style: TextStyle(color: Colors.grey, fontSize: 10, letterSpacing: 1.5)),
+                        const SizedBox(height: 15),
+                        RepaintBoundary(
+                          key: _paletteKey,
+                          child: Container(
+                            color: Colors.black,
+                            height: 90,
+                            child: ListView.separated(
+                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              scrollDirection: Axis.horizontal,
+                              itemCount: widget.result.dominantColors.length,
+                              separatorBuilder: (_, __) => const SizedBox(width: 20),
+                              itemBuilder: (context, index) {
+                                final c = widget.result.dominantColors[index];
+                                final isSelected = _selectedIndex == index;
+                                final color = Color.fromARGB(255, c.red, c.green, c.blue);
+                                
+                                return GestureDetector(
+                                  onTap: () => _selectColor(index),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      AnimatedContainer(
+                                        duration: const Duration(milliseconds: 200),
+                                        width: isSelected ? 55 : 45,
+                                        height: isSelected ? 55 : 45,
+                                        decoration: BoxDecoration(
+                                          color: color,
+                                          shape: BoxShape.circle,
+                                          border: isSelected ? Border.all(color: Colors.white, width: 2) : null,
+                                          boxShadow: isSelected ? [BoxShadow(color: color, blurRadius: 10)] : null,
+                                        ),
+                                        child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 20) : null,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        "${c.percentage.round()}%",
+                                        style: TextStyle(
+                                          color: isSelected ? Colors.white : Colors.grey,
+                                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
                           ),
+                        ),
                       ],
                     ),
                   ),
-                );
-              },
-            ),
+                ),
+              ),
+            ],
           ),
+
+          // SPINNER OVERLAY
+          // Positioned absolutely on top so it doesn't impact the column layout
+          if (_processing)
+            const Center(child: CircularProgressIndicator()),
         ],
       ),
     );
   }
+}
+
+// --- BACKGROUND WORKER ---
+
+Map<String, Uint8List> generateLayers(Map<String, dynamic> request) {
+  final int width = request['width'];
+  final int height = request['height'];
+  final Uint8List map = request['map'];
+  final int target = request['target'];
+  final int thickness = request['thickness'];
+  final int dimAlpha = request['dimAlpha'];
+
+  final int length = width * height * 4;
+  final Uint8List edgeBytes = Uint8List(length);
+  final Uint8List dimmingBytes = Uint8List(length);
+
+  bool isTarget(int x, int y) {
+    if (x < 0 || x >= width || y < 0 || y >= height) return false;
+    return map[y * width + x] == target;
+  }
+
+  for (int y = 0; y < height; y++) {
+    for (int x = 0; x < width; x++) {
+      final int i = y * width + x;
+      final int offset = i * 4;
+
+      if (map[i] == target) {
+        dimmingBytes[offset + 3] = 0; 
+
+        bool isEdge = false;
+        outerLoop:
+        for (int dy = -thickness; dy <= thickness; dy++) {
+          for (int dx = -thickness; dx <= thickness; dx++) {
+            if (!isTarget(x + dx, y + dy)) {
+              isEdge = true;
+              break outerLoop;
+            }
+          }
+        }
+
+        if (isEdge) {
+          edgeBytes[offset] = 255; edgeBytes[offset+1] = 255; edgeBytes[offset+2] = 255;
+          edgeBytes[offset + 3] = 255; 
+        }
+      } else {
+        dimmingBytes[offset] = 0; dimmingBytes[offset+1] = 0; dimmingBytes[offset+2] = 0;
+        dimmingBytes[offset + 3] = dimAlpha; 
+        
+        edgeBytes[offset + 3] = 0; 
+      }
+    }
+  }
+
+  return {'edges': edgeBytes, 'dimming': dimmingBytes};
 }
