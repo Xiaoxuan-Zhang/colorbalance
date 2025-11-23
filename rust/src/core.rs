@@ -7,6 +7,13 @@ use palette::color_difference::Ciede2000;
 use std::path::{Path, PathBuf};
 use std::io::Cursor;
 
+// --- NEW: EVENT SYSTEM ---
+#[derive(Debug, Clone)]
+pub enum AnalysisEvent {
+    Status(String),             // Text: "Blurring..."
+    IntermediateImage(Vec<u8>), // Visual: PNG bytes
+}
+
 // --- GENERIC PUBLIC STRUCTS ---
 
 /// Represents a final grouped color cluster found in the image.
@@ -66,6 +73,25 @@ pub struct ProcessingResult {
     pub _superpixels: Vec<Superpixel>,
     /// The final list of dominant color clusters (the palette).
     pub clusters: Vec<ColorCluster>,
+}
+
+// --- HELPER: VISUALIZE SEGMENTATION ---
+// Turns the abstract Superpixels into a viewable image
+fn visualize_segmentation(
+    width: u32, 
+    height: u32, 
+    labels: &[usize], 
+    superpixels: &[Superpixel]
+) -> DynamicImage {
+    let mut img_buf = ImageBuffer::new(width, height);
+    for (i, pixel) in img_buf.pixels_mut().enumerate() {
+        let sp = &superpixels[labels[i]];
+        // Convert LAB to RGB for display
+        let lab = Lab::new(sp.l, sp.a, sp.b);
+        let srgb = Srgb::from_color(lab).into_format::<u8>();
+        *pixel = Rgba([srgb.red, srgb.green, srgb.blue, 255]);
+    }
+    DynamicImage::ImageRgba8(img_buf)
 }
 
 // Holds the raw data needed for UI highlighting
@@ -477,8 +503,17 @@ pub fn generate_visualization_bytes(data: &ProcessingResult) -> Result<Vec<u8>> 
     Ok(bytes)
 }
 
+// Helper to encode any image to PNG bytes
+fn encode_to_png(img: &DynamicImage) -> Vec<u8> {
+    let mut bytes: Vec<u8> = Vec::new();
+    let mut cursor = Cursor::new(&mut bytes);
+    let _ = img.write_to(&mut cursor, ImageOutputFormat::Png);
+    bytes
+}
+
 // --- HIGH LEVEL GENERIC API ---
 
+// --- THE NEW ENGINE (WITH CALLBACK) ---
 /// A generic wrapper that takes a loaded image and runs the full analysis pipeline.
 ///
 /// This function abstracts the steps of:
@@ -497,41 +532,55 @@ pub fn generate_visualization_bytes(data: &ProcessingResult) -> Result<Vec<u8>> 
 /// A tuple containing:
 /// * `Vec<ColorCluster>` - The final sorted list of dominant colors.
 /// * `Vec<u8>` - The bytes of the generated visualization PNG.
-pub fn run_analysis(
+pub fn run_analysis_with_callback<F>(
     img: DynamicImage, 
     k: usize, 
-    max_dim: Option<u32>,
-    blur_sigma: Option<f32>
-) -> Result<ProcessingResult>{
-    // 1. Preprocess (Resize & Blur)
+    max_dim: Option<u32>, 
+    blur_sigma: Option<f32>,
+    callback: F // <--- The "Listener"
+) -> Result<ProcessingResult> 
+where F: Fn(AnalysisEvent) 
+{
+    // 1. Preprocess
+    callback(AnalysisEvent::Status("Smoothing Image...".to_string()));
     let target_dim = max_dim.unwrap_or(600);
     let target_sigma = blur_sigma.unwrap_or(2.0);
+
     let processed_img = preprocess_image(&img, target_dim, target_sigma);
     let (width, height) = processed_img.dimensions();
 
-    // 2. SLIC & Clustering
+    // Emit Visual: The Blurred Image
+    callback(AnalysisEvent::IntermediateImage(encode_to_png(&processed_img)));
+    // Artificial delay so user sees it (optional)
+    std::thread::sleep(std::time::Duration::from_millis(400));
+
+    // 2. SLIC Segmentation
+    callback(AnalysisEvent::Status("Grouping Pixels...".to_string()));
     let lab_pixels = rgb_to_lab(&processed_img);
     let (labels, superpixels) = slic_segmentation(&lab_pixels, width as usize, height as usize, 300, 20.0);
+
+    // Emit Visual: The Segmentation Map
+    let seg_viz = visualize_segmentation(width, height, &labels, &superpixels);
+    callback(AnalysisEvent::IntermediateImage(encode_to_png(&seg_viz)));
+    std::thread::sleep(std::time::Duration::from_millis(400));
+
+    // 3. Clustering
+    callback(AnalysisEvent::Status("Identifying Palette...".to_string()));
     let raw_clusters = cluster_colors(&superpixels, k);
-
-    // 3. Merge & Refine
     let mut merged_clusters = merge_colors(raw_clusters, 15.0);
-
-    // Create temp map to populate counts
+    
     let _ = create_segmentation_map(
         &labels, &superpixels, &mut merged_clusters, width as usize * height as usize
     );
 
-    // Filter small clusters (<3%)
+    // 4. Finalizing
     let mut final_clusters = calculate_final_clusters(&mut merged_clusters);
-
-    // 4. Final Map Generation
-    // This maps every pixel to the final, filtered palette
     let final_segmentation_map = create_segmentation_map(
         &labels, &superpixels, &mut final_clusters, width as usize * height as usize
     );
 
-    // Return the RICH object
+    callback(AnalysisEvent::Status("Done!".to_string()));
+
     Ok(ProcessingResult {
         original_img: img,
         processed_img: DynamicImage::ImageRgba8(processed_img.to_rgba8()),
@@ -540,4 +589,16 @@ pub fn run_analysis(
         _superpixels: superpixels,
         clusters: final_clusters,
     })
+}
+
+// --- THE COMPATIBILITY WRAPPER ---
+// Used by main.rs (CLI).
+// It calls the engine with an empty closure "|_| {}", ignoring all events.
+pub fn run_analysis(
+    img: DynamicImage, 
+    k: usize, 
+    max_dim: Option<u32>, 
+    blur_sigma: Option<f32>
+) -> Result<ProcessingResult> {
+    run_analysis_with_callback(img, k, max_dim, blur_sigma, |_| {})
 }

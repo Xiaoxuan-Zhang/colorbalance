@@ -15,12 +15,18 @@ import 'src/rust/frb_generated.dart';
 import 'src/rust/api.dart';
 
 // --- GLOBAL CONFIGURATION ---
+// 1. Analysis Settings
 const int kAnalysisMaxDim = 600;      
 const int kColorClusters = 5;         
-const double kGlowBlurSigma = 30.0;   
-const double kCoreBlurSigma = 5.0;    
-const int kEdgeThickness = 3;         
+
+// 2. Neon Glow Settings
+const double kGlowBlurSigma = 20.0;   
+const double kCoreBlurSigma = 2.0;    
+const int kEdgeThickness = 5;         
 const int kBackgroundDimAlpha = 180;  
+
+// 3. Layout Settings
+const double kColorStripTopMargin = 10.0; // <--- NEW: Adjust gap between image and strip here
 
 Future<void> main() async {
   await RustLib.init();
@@ -46,7 +52,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// --- SCREEN 1: HOME ---
+// --- SCREEN 1: HOME (PICKER) ---
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -56,51 +62,21 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  bool _loading = false;
-
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     
     if (image == null) return;
 
-    setState(() => _loading = true);
+    final bytes = await image.readAsBytes();
 
-    try {
-      final bytes = await image.readAsBytes();
-      
-      final decodedImage = await decodeImageFromList(bytes);
-      final originalWidth = decodedImage.width.toDouble();
-      final originalHeight = decodedImage.height.toDouble();
-
-      final result = await analyzeImageMobile(
-        imageBytes: bytes, 
-        k: kColorClusters, 
-        maxDim: kAnalysisMaxDim, 
-        blurSigma: null 
+    if (mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ProcessingScreen(originalBytes: bytes),
+        ),
       );
-      
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => InspectorScreen(
-              originalBytes: bytes, 
-              result: result,
-              imageWidth: originalWidth,
-              imageHeight: originalHeight,
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: $e"))
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -109,31 +85,147 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text("ColorBalance")),
       body: Center(
-        child: _loading
-            ? const CircularProgressIndicator()
-            : Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.auto_awesome, size: 80, color: Colors.white24),
-                  const SizedBox(height: 20),
-                  const Text("Discover your palette", style: TextStyle(color: Colors.grey)),
-                  const SizedBox(height: 40),
-                  FilledButton.icon(
-                    onPressed: _pickImage,
-                    icon: const Icon(Icons.add_a_photo),
-                    label: const Text("Analyze Photo"),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                    ),
-                  ),
-                ],
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.auto_awesome, size: 80, color: Colors.white24),
+            const SizedBox(height: 20),
+            const Text("Discover your palette", style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 40),
+            FilledButton.icon(
+              onPressed: _pickImage,
+              icon: const Icon(Icons.add_a_photo),
+              label: const Text("Analyze Photo"),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
               ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-// --- SCREEN 2: INSPECTOR ---
+// --- SCREEN 2: LIVE PROCESSING ---
+
+class ProcessingScreen extends StatefulWidget {
+  final Uint8List originalBytes;
+  const ProcessingScreen({super.key, required this.originalBytes});
+
+  @override
+  State<ProcessingScreen> createState() => _ProcessingScreenState();
+}
+
+class _ProcessingScreenState extends State<ProcessingScreen> {
+  String _statusMessage = "Initializing...";
+  Uint8List? _currentVisual;
+  double? _imgWidth;
+  double? _imgHeight;
+
+  @override
+  void initState() {
+    super.initState();
+    _startAnalysis();
+  }
+
+  void _startAnalysis() async {
+    final decoded = await decodeImageFromList(widget.originalBytes);
+    if (!mounted) return;
+    setState(() {
+      _imgWidth = decoded.width.toDouble();
+      _imgHeight = decoded.height.toDouble();
+    });
+
+    final stream = analyzeImageStream(
+      imageBytes: widget.originalBytes, 
+      k: kColorClusters, 
+      maxDim: kAnalysisMaxDim, 
+      blurSigma: null
+    );
+
+    stream.listen(
+      (event) {
+        event.when(
+          status: (msg) => setState(() => _statusMessage = msg), 
+          debugImage: (bytes) => setState(() => _currentVisual = bytes), 
+          result: (mobileResult) {
+            if (mounted && _imgWidth != null) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => InspectorScreen(
+                    originalBytes: widget.originalBytes,
+                    result: mobileResult,
+                    imageWidth: _imgWidth!,
+                    imageHeight: _imgHeight!,
+                  ),
+                ),
+              );
+            }
+          }
+        );
+      },
+      onError: (err) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $err")));
+          Navigator.pop(context);
+        }
+      }
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Center(
+            child: _imgWidth != null 
+              ? AspectRatio(
+                  aspectRatio: _imgWidth! / _imgHeight!,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 400),
+                    child: Image.memory(
+                      _currentVisual ?? widget.originalBytes,
+                      key: ValueKey(_currentVisual.hashCode),
+                      fit: BoxFit.fill,
+                      gaplessPlayback: true,
+                    ),
+                  ),
+                )
+              : const SizedBox(),
+          ),
+          Positioned(
+            bottom: 50, left: 20, right: 20,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                color: Colors.black.withOpacity(0.7),
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _statusMessage.toUpperCase(),
+                      style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, letterSpacing: 2),
+                    ),
+                    const SizedBox(height: 15),
+                    const LinearProgressIndicator(backgroundColor: Colors.white10, color: Colors.cyanAccent),
+                  ],
+                ),
+              ),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+}
+
+// --- SCREEN 3: INSPECTOR ---
 
 class InspectorScreen extends StatefulWidget {
   final Uint8List originalBytes;
@@ -274,71 +366,89 @@ class _InspectorScreenState extends State<InspectorScreen> with SingleTickerProv
           )
         ],
       ),
-      // FIX: We use a Stack here so the Spinner floats ON TOP of the layout
-      // instead of inserting itself INTO the layout.
       body: Stack(
         children: [
-          // THE MAIN LAYOUT
           Column(
             children: [
-              // 1. IMAGE AREA
+              // --- SECTION 1: IMAGE + STRIP ---
               Expanded(
                 child: Center(
-                  child: InteractiveViewer(
-                    maxScale: 5.0,
-                    child: AspectRatio(
-                      aspectRatio: widget.imageWidth / widget.imageHeight,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          // 1A. Original Image
-                          Image.memory(widget.originalBytes, fit: BoxFit.fill),
-
-                          // 1B. Dimming Mask
-                          if (_dimmingImage != null)
-                            RawImage(image: _dimmingImage!, fit: BoxFit.fill),
-
-                          // 1C. Neon Edges
-                          if (_edgeImage != null)
-                            AnimatedBuilder(
-                              animation: _glowController,
-                              builder: (_, __) {
-                                final glowOpacity = 0.4 + (_glowController.value * 0.6);
-                                return Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    Opacity(
-                                      opacity: glowOpacity,
-                                      child: ImageFiltered(
-                                        imageFilter: ui.ImageFilter.blur(sigmaX: kGlowBlurSigma, sigmaY: kGlowBlurSigma),
-                                        child: ColorFiltered(
-                                          colorFilter: ColorFilter.mode(uiColor, BlendMode.srcATop),
-                                          child: RawImage(image: _edgeImage!, fit: BoxFit.fill),
-                                        ),
-                                      ),
-                                    ),
-                                    Opacity(
-                                      opacity: 0.9,
-                                      child: ImageFiltered(
-                                        imageFilter: ui.ImageFilter.blur(sigmaX: kCoreBlurSigma, sigmaY: kCoreBlurSigma),
-                                        child: ColorFiltered(
-                                          colorFilter: ColorFilter.mode(coreColor, BlendMode.srcATop),
-                                          child: RawImage(image: _edgeImage!, fit: BoxFit.fill),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              },
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min, // GLUE
+                    children: [
+                      // 1A. Image Stack
+                      Flexible(
+                        child: InteractiveViewer(
+                          maxScale: 5.0,
+                          child: AspectRatio(
+                            aspectRatio: widget.imageWidth / widget.imageHeight,
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                Image.memory(widget.originalBytes, fit: BoxFit.fill),
+                                if (_dimmingImage != null)
+                                  RawImage(image: _dimmingImage!, fit: BoxFit.fill),
+                                if (_edgeImage != null)
+                                  AnimatedBuilder(
+                                    animation: _glowController,
+                                    builder: (_, __) {
+                                      final glowOpacity = 0.4 + (_glowController.value * 0.6);
+                                      return Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          Opacity(
+                                            opacity: glowOpacity,
+                                            child: ImageFiltered(
+                                              imageFilter: ui.ImageFilter.blur(sigmaX: kGlowBlurSigma, sigmaY: kGlowBlurSigma),
+                                              child: ColorFiltered(
+                                                colorFilter: ColorFilter.mode(uiColor, BlendMode.srcATop),
+                                                child: RawImage(image: _edgeImage!, fit: BoxFit.fill),
+                                              ),
+                                            ),
+                                          ),
+                                          Opacity(
+                                            opacity: 0.9,
+                                            child: ImageFiltered(
+                                              imageFilter: ui.ImageFilter.blur(sigmaX: kCoreBlurSigma, sigmaY: kCoreBlurSigma),
+                                              child: ColorFiltered(
+                                                colorFilter: ColorFilter.mode(coreColor, BlendMode.srcATop),
+                                                child: RawImage(image: _edgeImage!, fit: BoxFit.fill),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                              ],
                             ),
-                        ],
+                          ),
+                        ),
                       ),
-                    ),
+
+                      // 1B. Color Strip (Glued to Image)
+                      Container(
+                        height: 80,
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(top: kColorStripTopMargin), // <--- APPLIED CONSTANT
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: widget.result.dominantColors.map((c) {
+                            return Expanded(
+                              flex: c.percentage.round(),
+                              child: Container(
+                                color: Color.fromARGB(255, c.red, c.green, c.blue),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
 
-              // 2. HUD AREA
+              // --- SECTION 2: HUD AREA ---
               SizedBox(
                 height: 100, 
                 child: Center(
@@ -357,7 +467,9 @@ class _InspectorScreenState extends State<InspectorScreen> with SingleTickerProv
                                 color: Colors.grey[900],
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(color: uiColor, width: 1),
-                                boxShadow: [BoxShadow(color: uiColor.withOpacity(0.3), blurRadius: 15)],
+                                boxShadow: [
+                                  BoxShadow(color: uiColor.withOpacity(0.3), blurRadius: 15)
+                                ],
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -390,17 +502,17 @@ class _InspectorScreenState extends State<InspectorScreen> with SingleTickerProv
                 ),
               ),
 
-              // 3. PALETTE RAIL
+              // --- SECTION 3: PALETTE RAIL ---
               Container(
                 color: Colors.black, 
                 child: SafeArea(
                   top: false,
                   child: SizedBox(
-                    height: 150, // Fixed height prevents layout shifts
+                    height: 150, 
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text("PALETTE", style: TextStyle(color: Colors.grey, fontSize: 10, letterSpacing: 1.5)),
+                        const Text("COLOR PALETTE", style: TextStyle(color: Colors.grey, fontSize: 10, letterSpacing: 1.5)),
                         const SizedBox(height: 15),
                         RepaintBoundary(
                           key: _paletteKey,
@@ -457,11 +569,8 @@ class _InspectorScreenState extends State<InspectorScreen> with SingleTickerProv
               ),
             ],
           ),
-
-          // SPINNER OVERLAY
-          // Positioned absolutely on top so it doesn't impact the column layout
-          if (_processing)
-            const Center(child: CircularProgressIndicator()),
+          
+          if (_processing) const Center(child: CircularProgressIndicator()),
         ],
       ),
     );

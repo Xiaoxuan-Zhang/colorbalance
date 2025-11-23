@@ -64,7 +64,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => 1600699452;
+  int get rustContentHash => 1373938970;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -75,7 +75,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
-  Future<MobileResult> crateApiAnalyzeImageMobile({
+  Stream<BridgeEvent> crateApiAnalyzeImageStream({
     required List<int> imageBytes,
     required int k,
     int? maxDim,
@@ -92,47 +92,60 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
-  Future<MobileResult> crateApiAnalyzeImageMobile({
+  Stream<BridgeEvent> crateApiAnalyzeImageStream({
     required List<int> imageBytes,
     required int k,
     int? maxDim,
     double? blurSigma,
   }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_list_prim_u_8_loose(imageBytes, serializer);
-          sse_encode_u_32(k, serializer);
-          sse_encode_opt_box_autoadd_u_32(maxDim, serializer);
-          sse_encode_opt_box_autoadd_f_32(blurSigma, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 1,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_mobile_result,
-          decodeErrorData: sse_decode_AnyhowException,
+    final sink = RustStreamSink<BridgeEvent>();
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            sse_encode_StreamSink_bridge_event_Sse(sink, serializer);
+            sse_encode_list_prim_u_8_loose(imageBytes, serializer);
+            sse_encode_u_32(k, serializer);
+            sse_encode_opt_box_autoadd_u_32(maxDim, serializer);
+            sse_encode_opt_box_autoadd_f_32(blurSigma, serializer);
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 1,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: sse_decode_AnyhowException,
+          ),
+          constMeta: kCrateApiAnalyzeImageStreamConstMeta,
+          argValues: [sink, imageBytes, k, maxDim, blurSigma],
+          apiImpl: this,
         ),
-        constMeta: kCrateApiAnalyzeImageMobileConstMeta,
-        argValues: [imageBytes, k, maxDim, blurSigma],
-        apiImpl: this,
       ),
     );
+    return sink.stream;
   }
 
-  TaskConstMeta get kCrateApiAnalyzeImageMobileConstMeta => const TaskConstMeta(
-    debugName: "analyze_image_mobile",
-    argNames: ["imageBytes", "k", "maxDim", "blurSigma"],
+  TaskConstMeta get kCrateApiAnalyzeImageStreamConstMeta => const TaskConstMeta(
+    debugName: "analyze_image_stream",
+    argNames: ["sink", "imageBytes", "k", "maxDim", "blurSigma"],
   );
 
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return AnyhowException(raw as String);
+  }
+
+  @protected
+  RustStreamSink<BridgeEvent> dco_decode_StreamSink_bridge_event_Sse(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    throw UnimplementedError();
   }
 
   @protected
@@ -148,9 +161,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  MobileResult dco_decode_box_autoadd_mobile_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_mobile_result(raw);
+  }
+
+  @protected
   int dco_decode_box_autoadd_u_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
+  }
+
+  @protected
+  BridgeEvent dco_decode_bridge_event(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return BridgeEvent_Status(dco_decode_String(raw[1]));
+      case 1:
+        return BridgeEvent_DebugImage(dco_decode_list_prim_u_8_strict(raw[1]));
+      case 2:
+        return BridgeEvent_Result(dco_decode_box_autoadd_mobile_result(raw[1]));
+      default:
+        throw Exception("unreachable");
+    }
   }
 
   @protected
@@ -231,10 +265,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void dco_decode_unit(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return;
+  }
+
+  @protected
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_String(deserializer);
     return AnyhowException(inner);
+  }
+
+  @protected
+  RustStreamSink<BridgeEvent> sse_decode_StreamSink_bridge_event_Sse(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    throw UnimplementedError('Unreachable ()');
   }
 
   @protected
@@ -251,9 +299,37 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  MobileResult sse_decode_box_autoadd_mobile_result(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_mobile_result(deserializer));
+  }
+
+  @protected
   int sse_decode_box_autoadd_u_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_u_32(deserializer));
+  }
+
+  @protected
+  BridgeEvent sse_decode_bridge_event(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        var var_field0 = sse_decode_String(deserializer);
+        return BridgeEvent_Status(var_field0);
+      case 1:
+        var var_field0 = sse_decode_list_prim_u_8_strict(deserializer);
+        return BridgeEvent_DebugImage(var_field0);
+      case 2:
+        var var_field0 = sse_decode_box_autoadd_mobile_result(deserializer);
+        return BridgeEvent_Result(var_field0);
+      default:
+        throw UnimplementedError('');
+    }
   }
 
   @protected
@@ -355,6 +431,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_decode_unit(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+  }
+
+  @protected
   int sse_decode_i_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getInt32();
@@ -376,6 +457,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_StreamSink_bridge_event_Sse(
+    RustStreamSink<BridgeEvent> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(
+      self.setupAndSerialize(
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bridge_event,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+      ),
+      serializer,
+    );
+  }
+
+  @protected
   void sse_encode_String(String self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_list_prim_u_8_strict(utf8.encoder.convert(self), serializer);
@@ -388,9 +486,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_mobile_result(
+    MobileResult self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_mobile_result(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_32(self, serializer);
+  }
+
+  @protected
+  void sse_encode_bridge_event(BridgeEvent self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case BridgeEvent_Status(field0: final field0):
+        sse_encode_i_32(0, serializer);
+        sse_encode_String(field0, serializer);
+      case BridgeEvent_DebugImage(field0: final field0):
+        sse_encode_i_32(1, serializer);
+        sse_encode_list_prim_u_8_strict(field0, serializer);
+      case BridgeEvent_Result(field0: final field0):
+        sse_encode_i_32(2, serializer);
+        sse_encode_box_autoadd_mobile_result(field0, serializer);
+    }
   }
 
   @protected
@@ -482,6 +605,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_u_8(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint8(self);
+  }
+
+  @protected
+  void sse_encode_unit(void self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
   }
 
   @protected

@@ -1,8 +1,15 @@
 use anyhow::Result;
 use image::GenericImageView;
-use crate::core::{load_image_from_bytes, run_analysis};
+use crate::frb_generated::StreamSink; // Required for streams
+use crate::core::{load_image_from_bytes, run_analysis_with_callback, AnalysisEvent};
 
-// --- MOBILE-SPECIFIC STRUCTS (Simple types for Dart) ---
+// --- DART STREAM EVENTS ---
+#[derive(Debug, Clone)]
+pub enum BridgeEvent {
+    Status(String),             // Text update
+    DebugImage(Vec<u8>),        // Visual update
+    Result(MobileResult),       // Final payload
+}
 
 #[derive(Debug, Clone)]
 pub struct MobileColor {
@@ -21,21 +28,39 @@ pub struct MobileResult {
     pub segmentation_map: Vec<u8>,
 }
 
-// --- WRAPPER FUNCTION ---
-
-pub fn analyze_image_mobile(
+// --- STREAMING FUNCTION ---
+// Returns Result<()> because the actual data is pushed to the 'sink'
+pub fn analyze_image_stream(
+    sink: StreamSink<BridgeEvent>, 
     image_bytes: Vec<u8>, 
     k: u32, 
     max_dim: Option<u32>, 
     blur_sigma: Option<f32>
-) -> Result<MobileResult> {
-    // 1. Adapt Input: Bytes -> DynamicImage
+) -> Result<()> {
+    
     let img = load_image_from_bytes(&image_bytes)?;
 
-    // 2. Call Generic Engine (lib.rs)
-    let result = run_analysis(img, k as usize, max_dim, blur_sigma)?;
+    // Call the engine and hook into the callback
+    let result = run_analysis_with_callback(
+        img, 
+        k as usize, 
+        max_dim, 
+        blur_sigma, 
+        |event| {
+            // Map Core Events to Bridge Events
+            match event {
+                AnalysisEvent::Status(msg) => {
+                    sink.add(BridgeEvent::Status(msg)).unwrap();
+                },
+                AnalysisEvent::IntermediateImage(bytes) => {
+                    sink.add(BridgeEvent::DebugImage(bytes)).unwrap();
+                }
+            }
+        }
+    )?;
 
-    // 3. Adapt Output: Generic Cluster -> MobileColor
+    // --- PREPARE FINAL RESULT ---
+    // This runs after the pipeline finishes
     let mobile_colors = result.clusters.iter().map(|c| MobileColor {
         hex: c.hex.clone(),
         percentage: c.percentage,
@@ -44,8 +69,6 @@ pub fn analyze_image_mobile(
         blue: c.rgba[2],
     }).collect();
 
-    // 4. Optimize Map (usize -> u8)
-    // We do this conversion here to save bandwidth across the bridge
     let map_u8: Vec<u8> = result.segmentation_map
         .iter()
         .map(|&id| id as u8)
@@ -53,10 +76,13 @@ pub fn analyze_image_mobile(
     
     let (w, h) = result.processed_img.dimensions();
 
-    Ok(MobileResult {
+    // Push the final result to the stream
+    sink.add(BridgeEvent::Result(MobileResult {
         dominant_colors: mobile_colors,
         width: w,
         height: h,
         segmentation_map: map_u8,
-    })
+    })).unwrap();
+
+    Ok(())
 }

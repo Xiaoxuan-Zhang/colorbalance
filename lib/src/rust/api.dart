@@ -5,20 +5,32 @@
 
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+part 'api.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`
 
-Future<MobileResult> analyzeImageMobile({
+Stream<BridgeEvent> analyzeImageStream({
   required List<int> imageBytes,
   required int k,
   int? maxDim,
   double? blurSigma,
-}) => RustLib.instance.api.crateApiAnalyzeImageMobile(
+}) => RustLib.instance.api.crateApiAnalyzeImageStream(
   imageBytes: imageBytes,
   k: k,
   maxDim: maxDim,
   blurSigma: blurSigma,
 );
+
+@freezed
+sealed class BridgeEvent with _$BridgeEvent {
+  const BridgeEvent._();
+
+  const factory BridgeEvent.status(String field0) = BridgeEvent_Status;
+  const factory BridgeEvent.debugImage(Uint8List field0) =
+      BridgeEvent_DebugImage;
+  const factory BridgeEvent.result(MobileResult field0) = BridgeEvent_Result;
+}
 
 class MobileColor {
   final String hex;
