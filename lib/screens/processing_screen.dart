@@ -1,11 +1,11 @@
-import 'dart:typed_data';
+import 'dart:async';
+import 'dart:typed_data'; // For Uint8List
 import 'package:flutter/material.dart';
-import '../src/rust/api.dart'; 
-import '../constants.dart';    
-import 'inspector_screen.dart'; 
+import 'inspector_screen.dart';
 
 class ProcessingScreen extends StatefulWidget {
-  final Uint8List originalBytes;
+  final Uint8List originalBytes; // Store actual image data
+
   const ProcessingScreen({super.key, required this.originalBytes});
 
   @override
@@ -13,108 +13,147 @@ class ProcessingScreen extends StatefulWidget {
 }
 
 class _ProcessingScreenState extends State<ProcessingScreen> {
-  String _statusMessage = "Initializing...";
-  Uint8List? _currentVisual;
-  double? _imgWidth;
-  double? _imgHeight;
+  double _progress = 0.0;
+  String _status = "Initializing...";
+  String _subStatus = "Core :: Connect";
+  Color _orbColor = Colors.blue;
 
   @override
   void initState() {
     super.initState();
-    _startAnalysis();
+    _simulateProcessing();
   }
 
-  void _startAnalysis() async {
-    final decoded = await decodeImageFromList(widget.originalBytes);
-    if (!mounted) return;
-    setState(() {
-      _imgWidth = decoded.width.toDouble();
-      _imgHeight = decoded.height.toDouble();
-    });
+  void _simulateProcessing() {
+    final steps = [
+      (0.2, "Smoothing Image...", "Gaussian :: Sigma 2.0", Colors.blue),
+      (0.4, "Converting Space...", "RGB -> CIELAB", Colors.purple),
+      (0.6, "Grouping Pixels...", "SLIC :: Superpixels", Colors.pink),
+      (0.8, "Clustering...", "K-Means :: Centroids", Colors.amber),
+      (1.0, "Finalizing...", "Pipeline :: Merge", Colors.teal),
+    ];
 
-    final stream = analyzeImageStream(
-      imageBytes: widget.originalBytes, 
-      k: kColorClusters, 
-      maxDim: kAnalysisMaxDim, 
-      blurSigma: null
-    );
-
-    stream.listen(
-      (event) {
-        event.when(
-          status: (msg) => setState(() => _statusMessage = msg), 
-          debugImage: (bytes) => setState(() => _currentVisual = bytes), 
-          result: (mobileResult) {
-            if (mounted && _imgWidth != null) {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => InspectorScreen(
-                    originalBytes: widget.originalBytes,
-                    result: mobileResult,
-                    imageWidth: _imgWidth!,
-                    imageHeight: _imgHeight!,
-                  ),
-                ),
-              );
-            }
-          }
-        );
-      },
-      onError: (err) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $err")));
-          Navigator.pop(context);
-        }
+    int currentStep = 0;
+    Timer.periodic(const Duration(milliseconds: 1200), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
       }
-    );
+
+      if (currentStep < steps.length) {
+        setState(() {
+          _progress = steps[currentStep].$1;
+          _status = steps[currentStep].$2;
+          _subStatus = steps[currentStep].$3;
+          _orbColor = steps[currentStep].$4;
+        });
+        currentStep++;
+      } else {
+        timer.cancel();
+        // PASS THE DATA TO INSPECTOR
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => InspectorScreen(originalBytes: widget.originalBytes),
+              ),
+            );
+          }
+        });
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: const Color(0xFF0F0F0F),
       body: Stack(
         fit: StackFit.expand,
         children: [
+          // 1. Orb
           Center(
-            child: _imgWidth != null 
-              ? AspectRatio(
-                  aspectRatio: _imgWidth! / _imgHeight!,
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 400),
-                    child: Image.memory(
-                      _currentVisual ?? widget.originalBytes,
-                      key: ValueKey(_currentVisual.hashCode),
-                      fit: BoxFit.fill,
-                      gaplessPlayback: true,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 800),
+              width: 200,
+              height: 200,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _orbColor.withOpacity(0.2),
+                boxShadow: [
+                  BoxShadow(
+                    color: _orbColor.withOpacity(0.4),
+                    blurRadius: 60,
+                    spreadRadius: 20,
+                  ),
+                ],
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: 100, height: 100,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _orbColor.withOpacity(0.8),
                     ),
                   ),
-                )
-              : const SizedBox(),
-          ),
-          Positioned(
-            bottom: 50, left: 20, right: 20,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                // FIX: Replaced withOpacity with withValues
-                color: Colors.black.withValues(alpha: 0.7),
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _statusMessage.toUpperCase(),
-                      style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, letterSpacing: 2),
+                  SizedBox(
+                    width: 200, height: 200,
+                    child: CircularProgressIndicator(
+                      value: null,
+                      strokeWidth: 1,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Colors.white.withOpacity(0.2),
+                      ),
                     ),
-                    const SizedBox(height: 15),
-                    const LinearProgressIndicator(backgroundColor: Colors.white10, color: Colors.cyanAccent),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-          )
+          ),
+
+          // 2. Status
+          Positioned(
+            bottom: 100, left: 32, right: 32,
+            child: Column(
+              children: [
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: Text(
+                    _status,
+                    key: ValueKey(_status),
+                    style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                      fontSize: 28,
+                      fontFamily: 'serif',
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _subStatus.toUpperCase(),
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    letterSpacing: 2,
+                    color: Color(0xFFD4AF37),
+                  ),
+                ),
+                const SizedBox(height: 32),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(2),
+                  child: LinearProgressIndicator(
+                    value: _progress,
+                    backgroundColor: Colors.white10,
+                    color: const Color(0xFFD4AF37),
+                    minHeight: 4,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

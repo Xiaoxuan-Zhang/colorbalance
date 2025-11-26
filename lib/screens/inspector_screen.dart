@@ -1,503 +1,325 @@
-import 'dart:async';
-import 'dart:io';
-import 'dart:typed_data';
-import 'dart:math'; 
-import 'dart:ui' as ui;
-
-import 'package:flutter/foundation.dart';
+import 'dart:ui';
+import 'dart:typed_data'; // For Uint8List
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:gallery_saver/gallery_saver.dart';
 
-import '../src/rust/api.dart';
-import '../constants.dart';
-import '../worker.dart';
+// --- MOCK DATA MODEL ---
+class MockColor {
+  final String hex;
+  final double percentage;
+  final Color color;
+  final String name;
+  final String rgb;
+  final String cmyk;
+  final String lab;
 
-// --- UI STYLE CONFIGURATION (Linked Values) ---
-class InspectorStyle {
-  // 1. Colors
-  static const Color scaffoldBackground = Color(0xFF121212); // Matte Black
-  static const Color drawerBackground = Color(0xFF1E1E1E);   // Dark Gray Drawer
-  
-  // 2. Drawer Dimensions
-  static const double drawerRadius = 24.0;
-  static const double drawerPaddingHorz = 24.0;
-  static const double drawerPaddingTop = 20.0;
-  static const double drawerPaddingBottom = 10.0;
-  
-  // 3. Component Sizes
-  static const double dnaStripHeight = 32.0;
-  static const double dnaStripRadius = 4.0;
-  
-  static const double infoPanelHeight = 50.0;
-  
-  static const double swatchRailHeight = 90.0;
-  static const double swatchSizeSelected = 60.0;
-  static const double swatchSizeUnselected = 50.0;
-  
-  // 4. Spacing (Linking vertical gaps)
-  static const double sectionSpacing = 24.0; // Consistent gap between elements
+  const MockColor({
+    required this.hex,
+    required this.percentage,
+    required this.color,
+    required this.name,
+    required this.rgb,
+    required this.cmyk,
+    required this.lab,
+  });
 }
 
-class InspectorScreen extends StatefulWidget {
-  final Uint8List originalBytes;
-  final MobileResult result;
-  final double imageWidth;
-  final double imageHeight;
+final List<MockColor> kMockPalette = [
+  MockColor(hex: "#D4AF37", percentage: 24.0, color: Color(0xFFD4AF37), name: "Antique Gold", rgb: "212, 175, 55", cmyk: "15, 30, 85, 5", lab: "L* 72 a* 5 b* 68"),
+  MockColor(hex: "#2C3E50", percentage: 18.0, color: Color(0xFF2C3E50), name: "Midnight Blue", rgb: "44, 62, 80", cmyk: "80, 65, 40, 40", lab: "L* 25 a* -2 b* -12"),
+  MockColor(hex: "#E5E7E9", percentage: 15.0, color: Color(0xFFE5E7E9), name: "Gallery White", rgb: "229, 231, 233", cmyk: "5, 3, 3, 5", lab: "L* 92 a* -1 b* -2"),
+  MockColor(hex: "#8E44AD", percentage: 12.0, color: Color(0xFF8E44AD), name: "Royal Velvet", rgb: "142, 68, 173", cmyk: "60, 80, 0, 0", lab: "L* 45 a* 45 b* -40"),
+  MockColor(hex: "#16A085", percentage: 10.0, color: Color(0xFF16A085), name: "Patina Green", rgb: "22, 160, 133", cmyk: "85, 10, 55, 10", lab: "L* 58 a* -45 b* 5"),
+];
 
-  const InspectorScreen({
-    super.key,
-    required this.originalBytes,
-    required this.result,
-    required this.imageWidth,
-    required this.imageHeight,
-  });
+class InspectorScreen extends StatefulWidget {
+  final Uint8List originalBytes; // ACTUAL IMAGE DATA
+
+  const InspectorScreen({super.key, required this.originalBytes});
 
   @override
   State<InspectorScreen> createState() => _InspectorScreenState();
 }
 
-class _InspectorScreenState extends State<InspectorScreen>
-    with SingleTickerProviderStateMixin {
-  int? _selectedIndex;
-  ui.Image? _dimmingImage;
-  ui.Image? _edgeImage;
-  bool _processing = false;
-
-  late AnimationController _glowController;
-  final GlobalKey _paletteKey = GlobalKey();
-
-  @override
-  void initState() {
-    super.initState();
-    _glowController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2000),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _glowController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _selectColor(int index) async {
-    if (_selectedIndex == index) {
-      setState(() {
-        _selectedIndex = null;
-        _dimmingImage = null;
-        _edgeImage = null;
-      });
-      return;
-    }
-
-    setState(() {
-      _selectedIndex = index;
-      _processing = true;
-    });
-
-    final request = {
-      'width': widget.result.width.toInt(),
-      'height': widget.result.height.toInt(),
-      'map': widget.result.segmentationMap,
-      'target': index,
-      'thickness': kEdgeThickness,
-      'dimAlpha': kBackgroundDimAlpha,
-    };
-
-    final layers = await compute(generateLayers, request);
-
-    final dimImg = await _createImageFromPixels(
-      layers['dimming']!,
-      widget.result.width.toInt(),
-      widget.result.height.toInt(),
-    );
-
-    final edgeImg = await _createImageFromPixels(
-      layers['edges']!,
-      widget.result.width.toInt(),
-      widget.result.height.toInt(),
-    );
-
-    if (mounted) {
-      setState(() {
-        _dimmingImage = dimImg;
-        _edgeImage = edgeImg;
-        _processing = false;
-      });
-    }
-  }
-
-  Future<ui.Image> _createImageFromPixels(
-      Uint8List pixels, int width, int height) {
-    final Completer<ui.Image> completer = Completer();
-    ui.decodeImageFromPixels(
-      pixels,
-      width,
-      height,
-      ui.PixelFormat.rgba8888,
-      (img) => completer.complete(img),
-    );
-    return completer.future;
-  }
-
-  Future<void> _savePalette() async {
-    try {
-      RenderRepaintBoundary boundary = _paletteKey.currentContext!
-          .findRenderObject() as RenderRepaintBoundary;
-      ui.Image image = await boundary.toImage(pixelRatio: 3.0);
-      ByteData? byteData =
-          await image.toByteData(format: ui.ImageByteFormat.png);
-      final buffer = byteData!.buffer.asUint8List();
-      final tempDir = await getTemporaryDirectory();
-      final file = File(
-          '${tempDir.path}/palette_${DateTime.now().millisecondsSinceEpoch}.png');
-      await file.writeAsBytes(buffer);
-      await GallerySaver.saveImage(file.path);
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text("Palette Saved to Photos")));
-      }
-    } catch (_) {}
-  }
-
-  void _copyHex(String hex) {
-    Clipboard.setData(ClipboardData(text: hex));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          backgroundColor: Colors.grey[900],
-          content: Text("Copied $hex", textAlign: TextAlign.center),
-          duration: const Duration(seconds: 1)),
-    );
-  }
+class _InspectorScreenState extends State<InspectorScreen> {
+  int _selectedIndex = 0;
+  bool _showTechPanel = false;
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final isLandscape = size.width > size.height;
+    final topPadding = MediaQuery.of(context).padding.top;
+
+    final activeColor = kMockPalette[_selectedIndex];
+
     return Scaffold(
-      backgroundColor: InspectorStyle.scaffoldBackground,
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white70),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.ios_share, color: Colors.white70),
-            onPressed: _savePalette,
-            tooltip: "Export Palette",
-          )
-        ],
-      ),
+      backgroundColor: const Color(0xFF0F0F0F),
       body: Stack(
         children: [
-          Column(
-            children: [
-              // --- 1. HERO IMAGE CANVAS ---
-              Expanded(
-                child: InteractiveViewer(
-                  maxScale: 5.0,
-                  child: Center(
-                    child: AspectRatio(
-                      aspectRatio: widget.imageWidth / widget.imageHeight,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Image.memory(widget.originalBytes, fit: BoxFit.fill),
-                          if (_dimmingImage != null)
-                            RawImage(image: _dimmingImage!, fit: BoxFit.fill),
-                          if (_edgeImage != null)
-                            AnimatedBuilder(
-                              animation: _glowController,
-                              builder: (_, __) {
-                                final glowOpacity =
-                                    0.4 + (_glowController.value * 0.6);
-                                final selectedData = widget
-                                    .result.dominantColors[_selectedIndex!];
-                                final uiColor = Color.fromARGB(
-                                    255,
-                                    selectedData.red,
-                                    selectedData.green,
-                                    selectedData.blue);
-
-                                return Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    // Glow Layer
-                                    Opacity(
-                                      opacity: glowOpacity,
-                                      child: ImageFiltered(
-                                        imageFilter: ui.ImageFilter.blur(
-                                            sigmaX: kGlowBlurSigma,
-                                            sigmaY: kGlowBlurSigma),
-                                        child: ColorFiltered(
-                                          colorFilter: ColorFilter.mode(
-                                              uiColor, BlendMode.srcATop),
-                                          child: RawImage(
-                                              image: _edgeImage!,
-                                              fit: BoxFit.fill),
-                                        ),
-                                      ),
-                                    ),
-                                    // Core Layer
-                                    Opacity(
-                                      opacity: 0.9,
-                                      child: ImageFiltered(
-                                        imageFilter: ui.ImageFilter.blur(
-                                            sigmaX: kCoreBlurSigma,
-                                            sigmaY: kCoreBlurSigma),
-                                        child: ColorFiltered(
-                                          colorFilter: const ColorFilter.mode(
-                                              Colors.white, BlendMode.srcATop),
-                                          child: RawImage(
-                                              image: _edgeImage!,
-                                              fit: BoxFit.fill),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              },
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+          // --- LAYER 1: BACKGROUND IMAGE (ACTUAL DATA) ---
+          Positioned.fill(
+            right: isLandscape ? 100 : 0,
+            bottom: isLandscape ? 0 : 120,
+            child: InteractiveViewer(
+              minScale: 1.0,
+              maxScale: 4.0,
+              child: Image(
+                image: MemoryImage(widget.originalBytes), // USE PICKED IMAGE
+                fit: BoxFit.contain, // Contain ensures full image is seen
+                color: Colors.black.withOpacity(0.2),
+                colorBlendMode: BlendMode.darken,
               ),
-
-              // --- 2. THE DESIGNER'S DRAWER ---
-              Container(
-                decoration: const BoxDecoration(
-                  color: InspectorStyle.drawerBackground, 
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(InspectorStyle.drawerRadius),
-                    topRight: Radius.circular(InspectorStyle.drawerRadius),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black54,
-                      blurRadius: 20,
-                      offset: Offset(0, -5),
-                    )
-                  ],
-                ),
-                child: SafeArea(
-                  top: false,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                        InspectorStyle.drawerPaddingHorz, 
-                        InspectorStyle.drawerPaddingTop, 
-                        InspectorStyle.drawerPaddingHorz, 
-                        InspectorStyle.drawerPaddingBottom
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // A. DNA Strip (Using linked consts)
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(InspectorStyle.dnaStripRadius),
-                          child: SizedBox(
-                            height: InspectorStyle.dnaStripHeight,
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: widget.result.dominantColors.map((c) {
-                                return Expanded(
-                                  flex: c.percentage.round(),
-                                  child: Container(
-                                    color: Color.fromARGB(
-                                        255, c.red, c.green, c.blue),
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                          ),
-                        ),
-                        
-                        const SizedBox(height: InspectorStyle.sectionSpacing),
-
-                        // B. Info Panel
-                        _buildInspectorInfo(),
-
-                        const SizedBox(height: InspectorStyle.sectionSpacing),
-
-                        // C. Swatch Rail
-                        _buildSwatchRail(),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-          if (_processing) const Center(child: CircularProgressIndicator(color: Colors.white)),
+
+          // --- LAYER 2: TOP NAVIGATION ---
+          Positioned(
+            top: 0, left: 0, right: isLandscape ? 100 : 0,
+            child: Container(
+              padding: EdgeInsets.fromLTRB(20, topPadding + 10, 20, 20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _GlassButton(
+                    icon: Icons.arrow_back,
+                    onTap: () => Navigator.pop(context),
+                  ),
+                  Row(
+                    children: [
+                      _GlassButton(
+                        icon: Icons.tune,
+                        label: "Data",
+                        onTap: () => setState(() => _showTechPanel = true),
+                      ),
+                      const SizedBox(width: 12),
+                      _GlassButton(icon: Icons.ios_share, onTap: () {}),
+                    ],
+                  )
+                ],
+              ),
+            ),
+          ),
+
+          // --- LAYER 3: FLOATING HUD ---
+          Positioned(
+            top: topPadding + 80,
+            left: 20,
+            child: _FloatingHud(colorData: activeColor),
+          ),
+
+          // --- LAYER 4: PALETTE RAIL ---
+          if (isLandscape)
+            Positioned(
+              right: 0, top: 0, bottom: 0, width: 100,
+              child: _SideRail(
+                selectedIndex: _selectedIndex,
+                onSelect: (index) => setState(() => _selectedIndex = index),
+              ),
+            )
+          else
+            Positioned(
+              left: 0, right: 0, bottom: 0, height: 120,
+              child: _BottomRail(
+                selectedIndex: _selectedIndex,
+                onSelect: (index) => setState(() => _selectedIndex = index),
+              ),
+            ),
+
+          // --- LAYER 5: TECH PANEL ---
+          if (_showTechPanel)
+            _TechPanelOverlay(
+              isLandscape: isLandscape,
+              colorData: activeColor,
+              onClose: () => setState(() => _showTechPanel = false),
+            ),
         ],
       ),
     );
   }
+}
 
-  // --- INFO PANEL ---
-  Widget _buildInspectorInfo() {
-    final selectedData = _selectedIndex != null
-        ? widget.result.dominantColors[_selectedIndex!]
-        : null;
+// --- COMPONENTS (Same as before) ---
 
-    if (selectedData == null) {
-      return SizedBox(
-        height: InspectorStyle.infoPanelHeight,
-        child: Center(
-          child: Text(
-            "Tap a swatch to analyze",
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.3),
-              fontSize: 14,
-              fontWeight: FontWeight.w300,
-              letterSpacing: 0.5,
+class _GlassButton extends StatelessWidget {
+  final IconData icon;
+  final String? label;
+  final VoidCallback onTap;
+  const _GlassButton({required this.icon, this.label, required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(30),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            height: 44, padding: const EdgeInsets.symmetric(horizontal: 16),
+            color: Colors.white.withOpacity(0.1),
+            child: Row(children: [Icon(icon, color: Colors.white, size: 18), if (label != null) ...[const SizedBox(width: 8), Text(label!, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500))]]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FloatingHud extends StatelessWidget {
+  final MockColor colorData;
+  const _FloatingHud({required this.colorData});
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), border: Border(left: BorderSide(color: colorData.color, width: 4))),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("DOMINANT", style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10, letterSpacing: 1)),
+              const SizedBox(height: 4),
+              Row(children: [Text(colorData.hex, style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 16)), const SizedBox(width: 12), Container(width: 1, height: 12, color: Colors.white24), const SizedBox(width: 12), Text("${colorData.percentage.toInt()}%", style: const TextStyle(color: Colors.white70))]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomRail extends StatelessWidget {
+  final int selectedIndex;
+  final Function(int) onSelect;
+  const _BottomRail({required this.selectedIndex, required this.onSelect});
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          color: const Color(0xFF121212).withOpacity(0.85),
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 30),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("PALETTE", style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 10, letterSpacing: 2)),
+              const Spacer(),
+              SizedBox(height: 50, child: ListView.separated(scrollDirection: Axis.horizontal, itemCount: kMockPalette.length, separatorBuilder: (_, __) => const SizedBox(width: 20), itemBuilder: (_, i) => _Swatch(color: kMockPalette[i].color, isSelected: i == selectedIndex, onTap: () => onSelect(i)))),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SideRail extends StatelessWidget {
+  final int selectedIndex;
+  final Function(int) onSelect;
+  const _SideRail({required this.selectedIndex, required this.onSelect});
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          color: const Color(0xFF121212).withOpacity(0.9),
+          padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 10),
+          child: Column(
+            children: [
+              RotatedBox(quarterTurns: 3, child: Text("PALETTE", style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 10, letterSpacing: 2))),
+              const SizedBox(height: 30),
+              Expanded(child: ListView.separated(itemCount: kMockPalette.length, separatorBuilder: (_, __) => const SizedBox(height: 20), itemBuilder: (_, i) => _Swatch(color: kMockPalette[i].color, isSelected: i == selectedIndex, onTap: () => onSelect(i)))),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Swatch extends StatelessWidget {
+  final Color color;
+  final bool isSelected;
+  final VoidCallback onTap;
+  const _Swatch({required this.color, required this.isSelected, required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutQuad,
+        width: isSelected ? 50 : 40,
+        height: isSelected ? 50 : 40,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: isSelected ? Border.all(color: Colors.white, width: 3) : null,
+          boxShadow: isSelected ? [BoxShadow(color: color.withOpacity(0.6), blurRadius: 12, spreadRadius: 0)] : [BoxShadow(color: Colors.transparent, blurRadius: 0, spreadRadius: 0)],
+        ),
+      ),
+    );
+  }
+}
+
+class _TechPanelOverlay extends StatelessWidget {
+  final bool isLandscape;
+  final MockColor colorData;
+  final VoidCallback onClose;
+  const _TechPanelOverlay({required this.isLandscape, required this.colorData, required this.onClose});
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onClose,
+      child: Container(
+        color: Colors.black54,
+        child: Align(
+          alignment: isLandscape ? Alignment.centerRight : Alignment.bottomCenter,
+          child: GestureDetector(
+            onTap: () {},
+            child: Container(
+              width: isLandscape ? 400 : double.infinity,
+              height: isLandscape ? double.infinity : 450,
+              decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: isLandscape ? const BorderRadius.horizontal(left: Radius.circular(32)) : const BorderRadius.vertical(top: Radius.circular(32)), border: Border.all(color: Colors.white10)),
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text("TECHNICAL SPECTRUM", style: TextStyle(color: Colors.grey, fontSize: 10, letterSpacing: 1.5)), const SizedBox(height: 8), Text(colorData.name, style: const TextStyle(fontFamily: 'serif', fontSize: 32, color: Colors.white))]), IconButton(icon: const Icon(Icons.close, color: Colors.grey), onPressed: onClose)]),
+                  const SizedBox(height: 40),
+                  _DataRow(label: "HEX", value: colorData.hex, color: Colors.white),
+                  _DataRow(label: "RGB", value: colorData.rgb, color: Colors.grey),
+                  _DataRow(label: "CMYK", value: colorData.cmyk, color: Colors.grey),
+                  _DataRow(label: "LAB", value: colorData.lab, color: const Color(0xFFD4AF37)),
+                  const SizedBox(height: 20), const Divider(color: Colors.white10), const SizedBox(height: 20),
+                  const Text("HARMONY", style: TextStyle(color: Colors.grey, fontSize: 10, letterSpacing: 1.5)),
+                  const SizedBox(height: 16),
+                  Row(children: [CircleAvatar(backgroundColor: colorData.color), const SizedBox(width: 16), const Icon(Icons.arrow_forward, color: Colors.grey, size: 16), const SizedBox(width: 16), CircleAvatar(backgroundColor: colorData.color.withOpacity(0.5)), const SizedBox(width: 12), const Text("Complementary", style: TextStyle(color: Colors.white70, fontSize: 12))]),
+                ],
+              ),
             ),
           ),
         ),
-      );
-    }
-
-    return SizedBox(
-      height: InspectorStyle.infoPanelHeight,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Left: Hex Code
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                "HEX CODE",
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.4),
-                  fontSize: 10,
-                  letterSpacing: 1.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 2),
-              GestureDetector(
-                onTap: () => _copyHex(selectedData.hex),
-                child: Row(
-                  children: [
-                    Text(
-                      selectedData.hex.toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w300,
-                        letterSpacing: 1.0,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Icon(Icons.copy, size: 14, color: Colors.white.withValues(alpha: 0.3)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          // Right: Percentage
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                "COVERAGE",
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.4),
-                  fontSize: 10,
-                  letterSpacing: 1.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                "${selectedData.percentage.toStringAsFixed(1)}%",
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w300,
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
+}
 
-  // --- SWATCH RAIL ---
-  Widget _buildSwatchRail() {
-    return RepaintBoundary(
-      key: _paletteKey,
-      child: Container(
-        color: InspectorStyle.drawerBackground, // Linked to drawer color!
-        height: InspectorStyle.swatchRailHeight,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: widget.result.dominantColors.asMap().entries.map((entry) {
-            final index = entry.key;
-            final c = entry.value;
-            final isSelected = _selectedIndex == index;
-            final color = Color.fromARGB(255, c.red, c.green, c.blue);
-
-            // Dynamic size based on constants
-            final size = isSelected 
-                ? InspectorStyle.swatchSizeSelected 
-                : InspectorStyle.swatchSizeUnselected;
-
-            return GestureDetector(
-              onTap: () => _selectColor(index),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeOut,
-                width: size,
-                height: size * 1.3, // Taller aspect ratio for "Swatches"
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(isSelected ? 16 : 12),
-                  border: isSelected
-                      ? Border.all(color: Colors.white, width: 2)
-                      : Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1),
-                  boxShadow: isSelected
-                      ? [
-                          BoxShadow(
-                            color: color.withValues(alpha: 0.4),
-                            blurRadius: 15,
-                            offset: const Offset(0, 8),
-                          )
-                        ]
-                      : [],
-                ),
-                child: isSelected
-                    ? Align(
-                        alignment: Alignment.bottomCenter,
-                        child: Padding(
-                          padding: const EdgeInsets.only(bottom: 8.0),
-                          child: Container(
-                            width: 4, height: 4,
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ),
-                      )
-                    : null,
-              ),
-            );
-          }).toList(),
-        ),
-      ),
+class _DataRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  const _DataRow({required this.label, required this.value, required this.color});
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)), Text(value, style: TextStyle(color: color, fontFamily: 'monospace', fontSize: 14))]),
     );
   }
 }
