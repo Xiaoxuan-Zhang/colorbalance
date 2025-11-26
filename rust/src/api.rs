@@ -1,7 +1,7 @@
 use anyhow::Result;
 use image::GenericImageView;
 use crate::frb_generated::StreamSink; // Required for streams
-use crate::core::{load_image_from_bytes, run_analysis_with_callback, AnalysisEvent};
+use crate::core::{rgb_to_cmyk_string, lab_to_string, load_image_from_bytes, run_analysis_with_callback, AnalysisEvent};
 
 // --- DART STREAM EVENTS ---
 #[derive(Debug, Clone)]
@@ -13,11 +13,15 @@ pub enum BridgeEvent {
 
 #[derive(Debug, Clone)]
 pub struct MobileColor {
-    pub hex: String,
-    pub percentage: f32,
     pub red: u8,
     pub green: u8,
     pub blue: u8,
+    pub hex: String,
+    pub percentage: f32,
+    pub label: String,
+    // NEW: Pre-calculated strings for the Flutter UI
+    pub cmyk: String,
+    pub lab: String,
 }
 
 #[derive(Debug, Clone)]
@@ -61,12 +65,22 @@ pub fn analyze_image_stream(
 
     // --- PREPARE FINAL RESULT ---
     // This runs after the pipeline finishes
-    let mobile_colors = result.clusters.iter().map(|c| MobileColor {
-        hex: c.hex.clone(),
-        percentage: c.percentage,
-        red: c.rgba[0],
-        green: c.rgba[1],
-        blue: c.rgba[2],
+    let mobile_colors = result.clusters.iter().map(|c| {
+        let r = c.rgba[0];
+        let g = c.rgba[1];
+        let b = c.rgba[2];
+
+        MobileColor {
+            red: r,
+            green: g,
+            blue: b,
+            hex: c.hex.clone(),
+            percentage: c.percentage,
+            label: "".to_string(), // Can implement color naming later
+            // Populate using the new helpers from core.rs
+            cmyk: rgb_to_cmyk_string(r, g, b),
+            lab: lab_to_string(c.lab),
+        }
     }).collect();
 
     let map_u8: Vec<u8> = result.segmentation_map

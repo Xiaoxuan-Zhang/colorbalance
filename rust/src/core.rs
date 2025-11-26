@@ -75,7 +75,40 @@ pub struct ProcessingResult {
     pub clusters: Vec<ColorCluster>,
 }
 
-// --- HELPER: VISUALIZE SEGMENTATION ---
+// --- HELPERS ---
+
+
+// Formats the existing palette::Lab struct into a string "L* 50 a* 20 b* -10"
+pub fn lab_to_string(lab: Lab) -> String {
+    format!("L* {:.0}  a* {:.0}  b* {:.0}", lab.l, lab.a, lab.b)
+}
+
+// Calculates Naive CMYK from RGB bytes for UI display
+pub fn rgb_to_cmyk_string(r: u8, g: u8, b: u8) -> String {
+    let r = r as f32 / 255.0;
+    let g = g as f32 / 255.0;
+    let b = b as f32 / 255.0;
+
+    let k = 1.0 - r.max(g).max(b);
+    
+    // Avoid division by zero for pure black
+    if (1.0 - k).abs() < f32::EPSILON {
+        return "0, 0, 0, 100".to_string();
+    }
+
+    let c = (1.0 - r - k) / (1.0 - k);
+    let m = (1.0 - g - k) / (1.0 - k);
+    let y = (1.0 - b - k) / (1.0 - k);
+
+    format!(
+        "{:.0}, {:.0}, {:.0}, {:.0}",
+        c * 100.0,
+        m * 100.0,
+        y * 100.0,
+        k * 100.0
+    )
+}
+
 // Turns the abstract Superpixels into a viewable image
 fn visualize_segmentation(
     width: u32, 

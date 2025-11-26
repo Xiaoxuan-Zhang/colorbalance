@@ -33,38 +33,50 @@ sealed class BridgeEvent with _$BridgeEvent {
 }
 
 class MobileColor {
-  final String hex;
-  final double percentage;
   final int red;
   final int green;
   final int blue;
+  final String hex;
+  final double percentage;
+  final String label;
+  final String cmyk;
+  final String lab;
 
   const MobileColor({
-    required this.hex,
-    required this.percentage,
     required this.red,
     required this.green,
     required this.blue,
+    required this.hex,
+    required this.percentage,
+    required this.label,
+    required this.cmyk,
+    required this.lab,
   });
 
   @override
   int get hashCode =>
-      hex.hashCode ^
-      percentage.hashCode ^
       red.hashCode ^
       green.hashCode ^
-      blue.hashCode;
+      blue.hashCode ^
+      hex.hashCode ^
+      percentage.hashCode ^
+      label.hashCode ^
+      cmyk.hashCode ^
+      lab.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is MobileColor &&
           runtimeType == other.runtimeType &&
-          hex == other.hex &&
-          percentage == other.percentage &&
           red == other.red &&
           green == other.green &&
-          blue == other.blue;
+          blue == other.blue &&
+          hex == other.hex &&
+          percentage == other.percentage &&
+          label == other.label &&
+          cmyk == other.cmyk &&
+          lab == other.lab;
 }
 
 class MobileResult {

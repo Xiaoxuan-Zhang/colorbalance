@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'src/rust/frb_generated.dart';
 import 'screens/home_screen.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await RustLib.init();
   
-  // Set transparent status bar for immersive design
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
-    systemNavigationBarColor: Color(0xFF0F0F0F),
+    // Match navigation bar to the new grey background
+    systemNavigationBarColor: Color(0xFF1A1A1A),
     systemNavigationBarIconBrightness: Brightness.light,
   ));
 
@@ -28,10 +30,14 @@ class MyApp extends StatelessWidget {
       darkTheme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0F0F0F), // Atelier Charcoal
+        // CHANGED: From Deep Charcoal (#0F0F0F) to Soft Dark Gray (#1A1A1A)
+        // This allows shadows to be visible and reduces eye strain.
+        scaffoldBackgroundColor: const Color(0xFF1A1A1A),
+        
         colorScheme: const ColorScheme.dark(
-          primary: Color(0xFFD4AF37), // Muted Gold
-          surface: Color(0xFF1E1E1E),
+          primary: Color(0xFFD4AF37),
+          // Surface is slightly lighter than background for contrast
+          surface: Color(0xFF2C2C2C), 
           onSurface: Color(0xFFEEEEEE),
         ),
         textTheme: const TextTheme(

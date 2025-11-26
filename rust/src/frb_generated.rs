@@ -180,17 +180,23 @@ impl SseDecode for Vec<u8> {
 impl SseDecode for crate::api::MobileColor {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_hex = <String>::sse_decode(deserializer);
-        let mut var_percentage = <f32>::sse_decode(deserializer);
         let mut var_red = <u8>::sse_decode(deserializer);
         let mut var_green = <u8>::sse_decode(deserializer);
         let mut var_blue = <u8>::sse_decode(deserializer);
+        let mut var_hex = <String>::sse_decode(deserializer);
+        let mut var_percentage = <f32>::sse_decode(deserializer);
+        let mut var_label = <String>::sse_decode(deserializer);
+        let mut var_cmyk = <String>::sse_decode(deserializer);
+        let mut var_lab = <String>::sse_decode(deserializer);
         return crate::api::MobileColor {
-            hex: var_hex,
-            percentage: var_percentage,
             red: var_red,
             green: var_green,
             blue: var_blue,
+            hex: var_hex,
+            percentage: var_percentage,
+            label: var_label,
+            cmyk: var_cmyk,
+            lab: var_lab,
         };
     }
 }
@@ -323,11 +329,14 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::BridgeEvent> for crate::api::
 impl flutter_rust_bridge::IntoDart for crate::api::MobileColor {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.hex.into_into_dart().into_dart(),
-            self.percentage.into_into_dart().into_dart(),
             self.red.into_into_dart().into_dart(),
             self.green.into_into_dart().into_dart(),
             self.blue.into_into_dart().into_dart(),
+            self.hex.into_into_dart().into_dart(),
+            self.percentage.into_into_dart().into_dart(),
+            self.label.into_into_dart().into_dart(),
+            self.cmyk.into_into_dart().into_dart(),
+            self.lab.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -433,11 +442,14 @@ impl SseEncode for Vec<u8> {
 impl SseEncode for crate::api::MobileColor {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <String>::sse_encode(self.hex, serializer);
-        <f32>::sse_encode(self.percentage, serializer);
         <u8>::sse_encode(self.red, serializer);
         <u8>::sse_encode(self.green, serializer);
         <u8>::sse_encode(self.blue, serializer);
+        <String>::sse_encode(self.hex, serializer);
+        <f32>::sse_encode(self.percentage, serializer);
+        <String>::sse_encode(self.label, serializer);
+        <String>::sse_encode(self.cmyk, serializer);
+        <String>::sse_encode(self.lab, serializer);
     }
 }
 

@@ -1,6 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart'; // Added
+import 'package:image_picker/image_picker.dart';
 import 'processing_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -11,15 +11,11 @@ class HomeScreen extends StatelessWidget {
     final picker = ImagePicker();
     try {
       final XFile? image = await picker.pickImage(source: source);
-      
-      if (image == null) return; // User canceled
+      if (image == null) return;
 
-      // Read the bytes directly
       final bytes = await image.readAsBytes();
-
       if (!context.mounted) return;
 
-      // Navigate to Processing Screen with the ACTUAL bytes
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -28,7 +24,6 @@ class HomeScreen extends StatelessWidget {
       );
     } catch (e) {
       debugPrint("Error picking image: $e");
-      // Optional: Show snackbar error
     }
   }
 
@@ -37,15 +32,17 @@ class HomeScreen extends StatelessWidget {
     final size = MediaQuery.of(context).size;
     final isLandscape = size.width > size.height;
 
+    // LINKING TO THEME: Access the global colors defined in main.dart
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0F0F),
+      // LINKED: Uses the Dark Gray (#1A1A1A) from main.dart
+      backgroundColor: theme.scaffoldBackgroundColor, 
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // --- 1. STATIC BACKGROUND ---
-          _buildStaticBackground(),
-
-          // --- 2. MAIN CONTENT ---
+          _buildStaticBackground(colorScheme),
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 24.0),
@@ -70,7 +67,7 @@ class HomeScreen extends StatelessWidget {
         _buildHeader(context, TextAlign.center),
         const Spacer(),
         _buildButtons(context),
-        const SizedBox(height: 32),
+        const SizedBox(height: 48),
       ],
     );
   }
@@ -79,9 +76,7 @@ class HomeScreen extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Expanded(
-          child: _buildHeader(context, TextAlign.left),
-        ),
+        Expanded(child: _buildHeader(context, TextAlign.left)),
         const SizedBox(width: 60),
         _buildButtons(context),
       ],
@@ -89,30 +84,39 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context, TextAlign align) {
+    final textTheme = Theme.of(context).textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+    
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: align == TextAlign.left ? CrossAxisAlignment.start : CrossAxisAlignment.center,
       children: [
         Text(
           "COLOR BALANCE",
-          style: TextStyle(
-            fontSize: 10,
+          style: textTheme.displayLarge?.copyWith(
+            color: colorScheme.onSurface, // LINKED
+            height: 0.9,
+            fontSize: 28,
             letterSpacing: 4,
             fontWeight: FontWeight.bold,
-            color: Colors.white.withOpacity(0.5),
+          ),
+          textAlign: align,
+        ),
+        const SizedBox(height: 40), // Increased space between header and description
+        Text(
+          "A digital studio for the modern creative.",
+          textAlign: align,
+          style: textTheme.bodyMedium?.copyWith(
+             color: colorScheme.onSurface.withValues(alpha: 0.6), // LINKED
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 4), // Increased space between description
         Text(
-          "Curate your\nvision.",
+          "Extract color harmony from images.",
           textAlign: align,
-          style: Theme.of(context).textTheme.displayLarge,
-        ),
-        const SizedBox(height: 16),
-        Text(
-          "Algorithmic color extraction for\ninterior spaces and fine art.",
-          textAlign: align,
-          style: const TextStyle(color: Colors.grey, fontSize: 14, height: 1.5),
+          style: textTheme.bodyMedium?.copyWith(
+             color: colorScheme.onSurface.withValues(alpha: 0.6), // LINKED
+          ),
         ),
       ],
     );
@@ -123,56 +127,37 @@ class HomeScreen extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         _buildButton(
+          context,
           label: "Analyze Source",
           icon: Icons.camera_alt_outlined,
           isPrimary: true,
-          // Pass ImageSource.camera
           onTap: () => _pickImage(context, ImageSource.camera),
         ),
         const SizedBox(height: 16),
         _buildButton(
+          context,
           label: "Load from Gallery",
           icon: Icons.photo_library_outlined,
           isPrimary: false,
-          // Pass ImageSource.gallery
           onTap: () => _pickImage(context, ImageSource.gallery),
-        ),
-        const SizedBox(height: 32),
-        Text(
-          "v2.4.0 Live Input",
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.2),
-            fontSize: 10,
-            fontFamily: 'monospace',
-          ),
         ),
       ],
     );
   }
 
-  Widget _buildStaticBackground() {
+  Widget _buildStaticBackground(ColorScheme colors) {
     return Stack(
       fit: StackFit.expand,
       children: [
         Positioned(
           top: -100, left: -50,
-          child: Container(
-            width: 400, height: 400,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFF4A148C).withOpacity(0.2),
-            ),
-          ),
+          // LINKED: Uses primary color for the blob tint
+          child: Container(width: 400, height: 400, decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF4A148C).withValues(alpha: 0.2))),
         ),
         Positioned(
           bottom: -100, right: -50,
-          child: Container(
-            width: 350, height: 350,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFFD4AF37).withOpacity(0.15),
-            ),
-          ),
+          // LINKED: Uses primary color for the blob tint
+          child: Container(width: 350, height: 350, decoration: BoxDecoration(shape: BoxShape.circle, color: colors.primary.withValues(alpha: 0.15))),
         ),
         ClipRect(
           child: BackdropFilter(
@@ -184,29 +169,33 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildButton({
+  Widget _buildButton(BuildContext context, {
     required String label,
     required IconData icon,
     required bool isPrimary,
     required VoidCallback onTap,
   }) {
+    final colors = Theme.of(context).colorScheme;
+
     return SizedBox(
-      width: 280,
-      height: 56,
+      width: 300, // Wider buttons for better tap target
+      height: 60, // Taller buttons
       child: isPrimary
           ? FilledButton(
               onPressed: onTap,
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFEEEEEE),
-                foregroundColor: Colors.black,
+                // LINKED: Uses Theme Colors
+                backgroundColor: colors.onSurface, 
+                foregroundColor: colors.surface,
               ),
               child: _buildButtonContent(label, icon),
             )
           : OutlinedButton(
               onPressed: onTap,
               style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFFAAAAAA),
-                side: BorderSide(color: Colors.white.withOpacity(0.1)),
+                // LINKED: Uses Theme Colors
+                foregroundColor: colors.onSurface.withValues(alpha: 0.6),
+                side: BorderSide(color: colors.onSurface.withValues(alpha: 0.2)),
               ),
               child: _buildButtonContent(label, icon),
             ),
@@ -217,9 +206,9 @@ class HomeScreen extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(icon, size: 20),
-        const SizedBox(width: 12),
-        Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+        Icon(icon, size: 22),
+        const SizedBox(width: 14),
+        Text(label, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
       ],
     );
   }

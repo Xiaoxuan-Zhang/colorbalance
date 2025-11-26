@@ -215,14 +215,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   MobileColor dco_decode_mobile_color(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return MobileColor(
-      hex: dco_decode_String(arr[0]),
-      percentage: dco_decode_f_32(arr[1]),
-      red: dco_decode_u_8(arr[2]),
-      green: dco_decode_u_8(arr[3]),
-      blue: dco_decode_u_8(arr[4]),
+      red: dco_decode_u_8(arr[0]),
+      green: dco_decode_u_8(arr[1]),
+      blue: dco_decode_u_8(arr[2]),
+      hex: dco_decode_String(arr[3]),
+      percentage: dco_decode_f_32(arr[4]),
+      label: dco_decode_String(arr[5]),
+      cmyk: dco_decode_String(arr[6]),
+      lab: dco_decode_String(arr[7]),
     );
   }
 
@@ -367,17 +370,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   MobileColor sse_decode_mobile_color(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_hex = sse_decode_String(deserializer);
-    var var_percentage = sse_decode_f_32(deserializer);
     var var_red = sse_decode_u_8(deserializer);
     var var_green = sse_decode_u_8(deserializer);
     var var_blue = sse_decode_u_8(deserializer);
+    var var_hex = sse_decode_String(deserializer);
+    var var_percentage = sse_decode_f_32(deserializer);
+    var var_label = sse_decode_String(deserializer);
+    var var_cmyk = sse_decode_String(deserializer);
+    var var_lab = sse_decode_String(deserializer);
     return MobileColor(
-      hex: var_hex,
-      percentage: var_percentage,
       red: var_red,
       green: var_green,
       blue: var_blue,
+      hex: var_hex,
+      percentage: var_percentage,
+      label: var_label,
+      cmyk: var_cmyk,
+      lab: var_lab,
     );
   }
 
@@ -559,11 +568,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_encode_mobile_color(MobileColor self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.hex, serializer);
-    sse_encode_f_32(self.percentage, serializer);
     sse_encode_u_8(self.red, serializer);
     sse_encode_u_8(self.green, serializer);
     sse_encode_u_8(self.blue, serializer);
+    sse_encode_String(self.hex, serializer);
+    sse_encode_f_32(self.percentage, serializer);
+    sse_encode_String(self.label, serializer);
+    sse_encode_String(self.cmyk, serializer);
+    sse_encode_String(self.lab, serializer);
   }
 
   @protected
