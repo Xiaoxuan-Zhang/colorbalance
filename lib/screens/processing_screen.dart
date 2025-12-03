@@ -207,6 +207,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> with SingleTickerPr
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
     
     final activeColor = _isErrorState ? Colors.red : colorScheme.primary;
 
@@ -214,12 +215,49 @@ class _ProcessingScreenState extends State<ProcessingScreen> with SingleTickerPr
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: Center(
-          child: SingleChildScrollView(
+          child: isLandscape 
+              ? _buildLandscapeLayout(theme, activeColor) 
+              : _buildPortraitLayout(theme, activeColor),
+        ),
+      ),
+    );
+  }
+
+  // --- RESPONSIVE LAYOUTS ---
+
+  Widget _buildPortraitLayout(ThemeData theme, Color activeColor) {
+    return SingleChildScrollView(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // --- TOP: LIVE SCANNER VISUALIZER ---
-                SizedBox(
+          _buildVisualizer(activeColor),
+          const SizedBox(height: 60),
+          _buildStepList(theme),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLandscapeLayout(ThemeData theme, Color activeColor) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        // Left Pane: Visualizer (Centered)
+        Expanded(
+          child: Center(child: _buildVisualizer(activeColor)),
+        ),
+        // Right Pane: List or Error (Centered)
+        Expanded(
+          child: Center(child: _buildStepList(theme)),
+        ),
+      ],
+    );
+  }
+
+  // --- COMPONENTS ---
+
+  Widget _buildVisualizer(Color activeColor) {
+    return SizedBox(
                   width: 280, height: 280,
                   child: Stack(
                     alignment: Alignment.center,
@@ -293,37 +331,31 @@ class _ProcessingScreenState extends State<ProcessingScreen> with SingleTickerPr
                       ),
                     ],
                   ),
-                ),
+    );
+  }
 
-                const SizedBox(height: 60),
-
-                // --- STEPS LIST or ERROR MESSAGE ---
-                Container(
+  Widget _buildStepList(ThemeData theme) {
+    return Container(
                   constraints: const BoxConstraints(maxWidth: 300), 
                   child: _isErrorState 
-                    ? _buildErrorText(context) // Show Error Message
-                    : IntrinsicWidth( // Show Normal Steps
+        ? _buildErrorText(theme)
+        : IntrinsicWidth(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: _steps.map((step) => _buildStepItem(step, theme)).toList(),
-                        ),
-                  ),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );
   }
 
-  Widget _buildErrorText(BuildContext context) {
+  Widget _buildErrorText(ThemeData theme) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           "PROCESSING FAILED",
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+          style: theme.textTheme.labelLarge?.copyWith(
             color: Colors.red, 
             letterSpacing: 2,
             fontWeight: FontWeight.bold,
@@ -334,7 +366,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> with SingleTickerPr
         Text(
           "We encountered an issue analyzing this image.\nPlease try a different photo.",
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+          style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
         ),
         const SizedBox(height: 32),
         OutlinedButton(
