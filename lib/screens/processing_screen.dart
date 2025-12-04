@@ -259,6 +259,9 @@ class _ProcessingScreenState extends State<ProcessingScreen>
   // --- COMPONENTS ---
 
   Widget _buildVisualizer(Color activeColor) {
+    // 1. Capture the exact image reference we want to show
+    final imageBytes = _currentVisual ?? widget.originalBytes;
+
     return SizedBox(
       width: 280,
       height: 280,
@@ -270,21 +273,22 @@ class _ProcessingScreenState extends State<ProcessingScreen>
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 500),
               child: ColorFiltered(
+                key: ValueKey(imageBytes),
                 colorFilter: _isErrorState
                     ? const ColorFilter.mode(Colors.grey, BlendMode.saturation)
                     : const ColorFilter.mode(Colors.transparent, BlendMode.dst),
                 child: Image.memory(
-                  _currentVisual ?? widget.originalBytes,
-                  key: ValueKey(_currentVisual.hashCode),
+                  imageBytes,
                   fit: BoxFit.cover,
                   width: 240,
                   height: 240,
-                  gaplessPlayback: true,
+                  gaplessPlayback: true, // Prevents white flashes during swaps
                 ),
               ),
             ),
           ),
-          // Ring (Stops spinning and turns red on error)
+
+          // ... (Ring and Overlays remain the same) ...
           RotationTransition(
             turns: _spinController,
             child: Container(
