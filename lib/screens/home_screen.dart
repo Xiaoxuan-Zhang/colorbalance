@@ -38,16 +38,19 @@ class HomeScreen extends StatelessWidget {
 
     return Scaffold(
       // LINKED: Uses the Dark Gray (#1A1A1A) from main.dart
-      backgroundColor: theme.scaffoldBackgroundColor, 
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: Stack(
         fit: StackFit.expand,
         children: [
           _buildStaticBackground(colorScheme),
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 24.0),
-              child: isLandscape 
-                  ? _buildLandscapeLayout(context) 
+              padding: const EdgeInsets.symmetric(
+                horizontal: 32.0,
+                vertical: 24.0,
+              ),
+              child: isLandscape
+                  ? _buildLandscapeLayout(context)
                   : _buildPortraitLayout(context),
             ),
           ),
@@ -86,10 +89,12 @@ class HomeScreen extends StatelessWidget {
   Widget _buildHeader(BuildContext context, TextAlign align) {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     return Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: align == TextAlign.left ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+      crossAxisAlignment: align == TextAlign.left
+          ? CrossAxisAlignment.start
+          : CrossAxisAlignment.center,
       children: [
         Text(
           "COLOR BALANCE",
@@ -102,12 +107,14 @@ class HomeScreen extends StatelessWidget {
           ),
           textAlign: align,
         ),
-        const SizedBox(height: 40), // Increased space between header and description
+        const SizedBox(
+          height: 40,
+        ), // Increased space between header and description
         Text(
           "A digital studio for the modern creative.",
           textAlign: align,
           style: textTheme.bodyMedium?.copyWith(
-             color: colorScheme.onSurface.withValues(alpha: 0.6), // LINKED
+            color: colorScheme.onSurface.withValues(alpha: 0.6), // LINKED
           ),
         ),
         const SizedBox(height: 4), // Increased space between description
@@ -115,7 +122,7 @@ class HomeScreen extends StatelessWidget {
           "Extract color harmony from images.",
           textAlign: align,
           style: textTheme.bodyMedium?.copyWith(
-             color: colorScheme.onSurface.withValues(alpha: 0.6), // LINKED
+            color: colorScheme.onSurface.withValues(alpha: 0.6), // LINKED
           ),
         ),
       ],
@@ -150,14 +157,30 @@ class HomeScreen extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         Positioned(
-          top: -100, left: -50,
+          top: -100,
+          left: -50,
           // LINKED: Uses primary color for the blob tint
-          child: Container(width: 400, height: 400, decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF4A148C).withValues(alpha: 0.2))),
+          child: Container(
+            width: 400,
+            height: 400,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFF4A148C).withValues(alpha: 0.2),
+            ),
+          ),
         ),
         Positioned(
-          bottom: -100, right: -50,
+          bottom: -100,
+          right: -50,
           // LINKED: Uses primary color for the blob tint
-          child: Container(width: 350, height: 350, decoration: BoxDecoration(shape: BoxShape.circle, color: colors.primary.withValues(alpha: 0.15))),
+          child: Container(
+            width: 350,
+            height: 350,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: colors.primary.withValues(alpha: 0.15),
+            ),
+          ),
         ),
         ClipRect(
           child: BackdropFilter(
@@ -169,7 +192,8 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildButton(BuildContext context, {
+  Widget _buildButton(
+    BuildContext context, {
     required String label,
     required IconData icon,
     required bool isPrimary,
@@ -185,7 +209,7 @@ class HomeScreen extends StatelessWidget {
               onPressed: onTap,
               style: FilledButton.styleFrom(
                 // LINKED: Uses Theme Colors
-                backgroundColor: colors.onSurface, 
+                backgroundColor: colors.onSurface,
                 foregroundColor: colors.surface,
               ),
               child: _buildButtonContent(label, icon),
@@ -195,7 +219,9 @@ class HomeScreen extends StatelessWidget {
               style: OutlinedButton.styleFrom(
                 // LINKED: Uses Theme Colors
                 foregroundColor: colors.onSurface.withValues(alpha: 0.6),
-                side: BorderSide(color: colors.onSurface.withValues(alpha: 0.2)),
+                side: BorderSide(
+                  color: colors.onSurface.withValues(alpha: 0.2),
+                ),
               ),
               child: _buildButtonContent(label, icon),
             ),
@@ -208,7 +234,10 @@ class HomeScreen extends StatelessWidget {
       children: [
         Icon(icon, size: 22),
         const SizedBox(width: 14),
-        Text(label, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+        ),
       ],
     );
   }

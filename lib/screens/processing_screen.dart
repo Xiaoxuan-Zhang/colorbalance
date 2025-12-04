@@ -1,9 +1,9 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import '../src/rust/api.dart'; 
-import '../constants.dart';    
-import 'inspector_screen.dart'; 
+import '../src/rust/api.dart';
+import '../constants.dart';
+import 'inspector_screen.dart';
 
 class ProcessingScreen extends StatefulWidget {
   final Uint8List originalBytes;
@@ -27,37 +27,38 @@ class _ProcessingStep {
   });
 }
 
-class _ProcessingScreenState extends State<ProcessingScreen> with SingleTickerProviderStateMixin {
+class _ProcessingScreenState extends State<ProcessingScreen>
+    with SingleTickerProviderStateMixin {
   // Image Data
   Uint8List? _currentVisual;
   double? _imgWidth;
   double? _imgHeight;
 
   // UI State
-  bool _isErrorState = false; 
+  bool _isErrorState = false;
 
   // Animation for the scanner ring
   late AnimationController _spinController;
-  
+
   // Steps Definition
   final List<_ProcessingStep> _steps = [
     _ProcessingStep(
-      id: "Smoothing", 
+      id: "Smoothing",
       label: "Softening Details",
       description: "Reducing visual noise...",
     ),
     _ProcessingStep(
-      id: "Grouping", 
+      id: "Grouping",
       label: "Analyzing Structure",
       description: "Mapping color regions...",
     ),
     _ProcessingStep(
-      id: "Identifying", 
+      id: "Identifying",
       label: "Extracting Harmonies",
       description: "Finding dominant tones...",
     ),
     _ProcessingStep(
-      id: "Done", 
+      id: "Done",
       label: "Curating Palette",
       description: "Finalizing selection...",
     ),
@@ -70,7 +71,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> with SingleTickerPr
       vsync: this,
       duration: const Duration(seconds: 4),
     )..repeat();
-    
+
     _startAnalysis();
   }
 
@@ -112,7 +113,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> with SingleTickerPr
     // Step 1: Smoothing starts
     _updateSteps("Smoothing");
     await Future.delayed(const Duration(seconds: 2));
-    
+
     // Step 2: Grouping starts
     _updateSteps("Grouping");
     await Future.delayed(const Duration(seconds: 2));
@@ -127,7 +128,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> with SingleTickerPr
     // --- 1. SETUP ---
     final buffer = await ui.instantiateImageCodec(widget.originalBytes);
     final frame = await buffer.getNextFrame();
-    
+
     if (!mounted) return;
     setState(() {
       _imgWidth = frame.image.width.toDouble();
@@ -136,7 +137,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> with SingleTickerPr
 
     // --- 2. ERROR SIMULATION SWITCH ---
     // Set this to TRUE to trigger the fake error sequence
-    bool simulateError = false; 
+    bool simulateError = false;
 
     if (simulateError) {
       await _simulateErrorSequence();
@@ -146,53 +147,51 @@ class _ProcessingScreenState extends State<ProcessingScreen> with SingleTickerPr
 
     // --- 3. REAL ANALYSIS ---
     final stream = analyzeImageStream(
-      imageBytes: widget.originalBytes, 
-      k: kColorClusters, 
-      maxDim: kAnalysisMaxDim, 
-      blurSigma: null
+      imageBytes: widget.originalBytes,
+      k: kColorClusters,
+      maxDim: kAnalysisMaxDim,
+      blurSigma: null,
     );
 
-    stream.listen(
-      (event) {
-        event.when(
-          status: (msg) => _updateSteps(msg), 
-          debugImage: (bytes) {
-            if (mounted) setState(() => _currentVisual = bytes);
-          }, 
-          result: (mobileResult) {
-            if (mounted) {
-              setState(() {
-                for (var s in _steps) {
-                  s.isCompleted = true;
-                  s.isActive = false;
-                }
-              });
-            }
-
-            if (mounted && _imgWidth != null) {
-              Future.delayed(const Duration(milliseconds: 800), () {
-                if (mounted) {
-                  Navigator.pushReplacement(
-                    context,
-                    PageRouteBuilder(
-                      pageBuilder: (_, __, ___) => InspectorScreen(
-                        originalBytes: widget.originalBytes,
-                        result: mobileResult,
-                        imageWidth: _imgWidth!,
-                        imageHeight: _imgHeight!,
-                      ),
-                      transitionsBuilder: (_, a, __, c) => FadeTransition(opacity: a, child: c),
-                      transitionDuration: const Duration(milliseconds: 800),
-                    ),
-                  );
-                }
-              });
-            }
+    stream.listen((event) {
+      event.when(
+        status: (msg) => _updateSteps(msg),
+        debugImage: (bytes) {
+          if (mounted) setState(() => _currentVisual = bytes);
+        },
+        result: (mobileResult) {
+          if (mounted) {
+            setState(() {
+              for (var s in _steps) {
+                s.isCompleted = true;
+                s.isActive = false;
+              }
+            });
           }
-        );
-      },
-      onError: (err) => _handleError(err.toString()),
-    );
+
+          if (mounted && _imgWidth != null) {
+            Future.delayed(const Duration(milliseconds: 800), () {
+              if (mounted) {
+                Navigator.pushReplacement(
+                  context,
+                  PageRouteBuilder(
+                    pageBuilder: (_, __, ___) => InspectorScreen(
+                      originalBytes: widget.originalBytes,
+                      result: mobileResult,
+                      imageWidth: _imgWidth!,
+                      imageHeight: _imgHeight!,
+                    ),
+                    transitionsBuilder: (_, a, __, c) =>
+                        FadeTransition(opacity: a, child: c),
+                    transitionDuration: const Duration(milliseconds: 800),
+                  ),
+                );
+              }
+            });
+          }
+        },
+      );
+    }, onError: (err) => _handleError(err.toString()));
   }
 
   void _handleError(String errorMsg) {
@@ -207,16 +206,17 @@ class _ProcessingScreenState extends State<ProcessingScreen> with SingleTickerPr
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
-    
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+
     final activeColor = _isErrorState ? Colors.red : colorScheme.primary;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
-          child: isLandscape 
-              ? _buildLandscapeLayout(theme, activeColor) 
-              : _buildPortraitLayout(theme, activeColor),
+        child: isLandscape
+            ? _buildLandscapeLayout(theme, activeColor)
+            : _buildPortraitLayout(theme, activeColor),
       ),
     );
   }
@@ -225,17 +225,12 @@ class _ProcessingScreenState extends State<ProcessingScreen> with SingleTickerPr
 
   Widget _buildPortraitLayout(ThemeData theme, Color activeColor) {
     return Column(
-              children: [
+      children: [
         // FIXED ZONE: Visualizer
         // Using Expanded ensures this takes up the top half and doesn't move
         // when the list below changes size.
-        Expanded(
-          flex: 5, 
-          child: Center(
-            child: _buildVisualizer(activeColor),
-          ),
-        ),
-        
+        Expanded(flex: 5, child: Center(child: _buildVisualizer(activeColor))),
+
         // FLEXIBLE ZONE: Steps List
         // Aligned to topCenter so it grows downwards, keeping the gap stable.
         Expanded(
@@ -244,7 +239,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> with SingleTickerPr
             alignment: Alignment.topCenter,
             child: _buildStepList(theme),
           ),
-      ),
+        ),
       ],
     );
   }
@@ -254,13 +249,9 @@ class _ProcessingScreenState extends State<ProcessingScreen> with SingleTickerPr
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         // Left Pane: Visualizer (Centered)
-        Expanded(
-          child: Center(child: _buildVisualizer(activeColor)),
-        ),
+        Expanded(child: Center(child: _buildVisualizer(activeColor))),
         // Right Pane: List or Error (Centered)
-        Expanded(
-          child: Center(child: _buildStepList(theme)),
-        ),
+        Expanded(child: Center(child: _buildStepList(theme))),
       ],
     );
   }
@@ -269,94 +260,105 @@ class _ProcessingScreenState extends State<ProcessingScreen> with SingleTickerPr
 
   Widget _buildVisualizer(Color activeColor) {
     return SizedBox(
-                  width: 280, height: 280,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // The Image being processed
-                      ClipOval(
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 500),
-                          child: ColorFiltered(
-                            colorFilter: _isErrorState 
-                                ? const ColorFilter.mode(Colors.grey, BlendMode.saturation) 
-                                : const ColorFilter.mode(Colors.transparent, BlendMode.dst),
-                          child: Image.memory(
-                            _currentVisual ?? widget.originalBytes,
-                            key: ValueKey(_currentVisual.hashCode),
-                            fit: BoxFit.cover,
-                            width: 240, height: 240,
-                            gaplessPlayback: true,
-                          ),
-                        ),
-                      ),
-                      ),
-                      // Ring (Stops spinning and turns red on error)
-                      RotationTransition(
-                        turns: _spinController,
-                        child: Container(
-                          width: 280, height: 280,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: activeColor.withValues(alpha: 0.3),
-                              width: 1,
-                            ),
-                            gradient: SweepGradient(
-                              colors: [
-                                Colors.transparent,
-                                activeColor.withValues(alpha: 0.1),
-                                activeColor.withValues(alpha: 0.5),
-                                Colors.transparent,
-                              ],
-                              stops: const [0.0, 0.5, 0.75, 1.0],
-                            ),
-                          ),
-                        ),
-                      ),
-                      // Error Icon Overlay
-                      if (_isErrorState)
-                        Container(
-                          width: 240, height: 240,
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.6),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.error_outline, size: 60, color: Colors.red),
-                        )
-                      else
-                      Container(
-                        width: 240, height: 240,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              Colors.white.withValues(alpha: 0.1),
-                              Colors.transparent,
-                              Colors.black.withValues(alpha: 0.3),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+      width: 280,
+      height: 280,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // The Image being processed
+          ClipOval(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 500),
+              child: ColorFiltered(
+                colorFilter: _isErrorState
+                    ? const ColorFilter.mode(Colors.grey, BlendMode.saturation)
+                    : const ColorFilter.mode(Colors.transparent, BlendMode.dst),
+                child: Image.memory(
+                  _currentVisual ?? widget.originalBytes,
+                  key: ValueKey(_currentVisual.hashCode),
+                  fit: BoxFit.cover,
+                  width: 240,
+                  height: 240,
+                  gaplessPlayback: true,
+                ),
+              ),
+            ),
+          ),
+          // Ring (Stops spinning and turns red on error)
+          RotationTransition(
+            turns: _spinController,
+            child: Container(
+              width: 280,
+              height: 280,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: activeColor.withValues(alpha: 0.3),
+                  width: 1,
+                ),
+                gradient: SweepGradient(
+                  colors: [
+                    Colors.transparent,
+                    activeColor.withValues(alpha: 0.1),
+                    activeColor.withValues(alpha: 0.5),
+                    Colors.transparent,
+                  ],
+                  stops: const [0.0, 0.5, 0.75, 1.0],
+                ),
+              ),
+            ),
+          ),
+          // Error Icon Overlay
+          if (_isErrorState)
+            Container(
+              width: 240,
+              height: 240,
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.6),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.error_outline,
+                size: 60,
+                color: Colors.red,
+              ),
+            )
+          else
+            Container(
+              width: 240,
+              height: 240,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white.withValues(alpha: 0.1),
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.3),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
   Widget _buildStepList(ThemeData theme) {
     return Container(
-                  constraints: const BoxConstraints(maxWidth: 300), 
-                  child: _isErrorState 
-        ? _buildErrorText(theme)
-        : IntrinsicWidth(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: _steps.map((step) => _buildStepItem(step, theme)).toList(),
-        ),
-      ),
+      constraints: const BoxConstraints(maxWidth: 300),
+      child: _isErrorState
+          ? _buildErrorText(theme)
+          : IntrinsicWidth(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: _steps
+                    .map((step) => _buildStepItem(step, theme))
+                    .toList(),
+              ),
+            ),
     );
   }
 
@@ -367,10 +369,10 @@ class _ProcessingScreenState extends State<ProcessingScreen> with SingleTickerPr
         Text(
           "PROCESSING FAILED",
           style: theme.textTheme.labelLarge?.copyWith(
-            color: Colors.red, 
+            color: Colors.red,
             letterSpacing: 2,
             fontWeight: FontWeight.bold,
-            fontSize: 16
+            fontSize: 16,
           ),
         ),
         const SizedBox(height: 16),
@@ -387,7 +389,7 @@ class _ProcessingScreenState extends State<ProcessingScreen> with SingleTickerPr
             side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
           ),
           child: const Text("Return to Studio"),
-        )
+        ),
       ],
     );
   }
@@ -396,13 +398,13 @@ class _ProcessingScreenState extends State<ProcessingScreen> with SingleTickerPr
     final colorScheme = theme.colorScheme;
     final isDone = step.isCompleted;
     final isActive = step.isActive;
-    
+
     final Color activeColor = colorScheme.primary;
     final Color inactiveColor = colorScheme.onSurface.withValues(alpha: 0.2);
-    
+
     Color iconColor = inactiveColor;
     Color textColor = inactiveColor;
-    
+
     if (isDone) {
       iconColor = activeColor;
       textColor = colorScheme.onSurface.withValues(alpha: 0.5);
@@ -419,23 +421,27 @@ class _ProcessingScreenState extends State<ProcessingScreen> with SingleTickerPr
         children: [
           // Status Icon
           Container(
-            width: 24, height: 24,
+            width: 24,
+            height: 24,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(color: iconColor, width: 1.5),
               color: isDone ? activeColor : Colors.transparent,
             ),
-            child: isDone 
-              ? Icon(Icons.check, size: 16, color: colorScheme.surface)
-              : (isActive 
-                  ? Padding(
-                      padding: const EdgeInsets.all(6),
-                      child: CircularProgressIndicator(strokeWidth: 2, color: activeColor),
-                    ) 
-                  : null),
+            child: isDone
+                ? Icon(Icons.check, size: 16, color: colorScheme.surface)
+                : (isActive
+                      ? Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: activeColor,
+                          ),
+                        )
+                      : null),
           ),
           const SizedBox(width: 20),
-          
+
           // Description Text
           Expanded(
             child: Column(
@@ -446,24 +452,24 @@ class _ProcessingScreenState extends State<ProcessingScreen> with SingleTickerPr
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: textColor,
                     fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                    fontSize: 16, 
+                    fontSize: 16,
                   ),
                 ),
                 AnimatedSize(
                   duration: const Duration(milliseconds: 300),
                   child: isActive
-                    ? Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          step.description,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: activeColor.withValues(alpha: 0.8),
-                            fontStyle: FontStyle.italic,
-                            fontSize: 12,
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            step.description,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: activeColor.withValues(alpha: 0.8),
+                              fontStyle: FontStyle.italic,
+                              fontSize: 12,
+                            ),
                           ),
-                        ),
-                      )
-                    : const SizedBox.shrink(),
+                        )
+                      : const SizedBox.shrink(),
                 ),
               ],
             ),

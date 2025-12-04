@@ -21,9 +21,12 @@ const double kMaxBlur = 8.0;
 const double kMinBlur = 2.0;
 
 // --- RIPPLE ANIMATION TUNING ---
-const Duration kRippleDuration = Duration(milliseconds: 2000); // Speed of the wave
-const double kRippleStartScale = 0.9; // <--- THIS CONTROLS STARTING RADIUS (1.0 = Button Size)
-const double kRippleEndScale = 1.2;   // How far it expands (1.6 = 160% size)
+const Duration kRippleDuration = Duration(
+  milliseconds: 2000,
+); // Speed of the wave
+const double kRippleStartScale =
+    0.9; // <--- THIS CONTROLS STARTING RADIUS (1.0 = Button Size)
+const double kRippleEndScale = 1.2; // How far it expands (1.6 = 160% size)
 
 class InspectorScreen extends StatefulWidget {
   final Uint8List originalBytes;
@@ -628,7 +631,9 @@ class _RippleSwatchState extends State<_RippleSwatch>
                 builder: (context, child) {
                   final value = _rippleController.value;
                   // Scale starts at kRippleStartScale and expands
-                  final scale = kRippleStartScale + (value * (kRippleEndScale - kRippleStartScale));
+                  final scale =
+                      kRippleStartScale +
+                      (value * (kRippleEndScale - kRippleStartScale));
                   // Opacity fades out as it expands
                   final opacity = (1.0 - value).clamp(0.0, 1.0);
                   final borderWidth = 3.0 * (1.0 - value).clamp(0.5, 1.0);

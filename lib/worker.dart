@@ -28,7 +28,7 @@ Map<String, Uint8List> generateLayers(Map<String, dynamic> request) {
 
       if (map[i] == target) {
         // --- SELECTED AREA ---
-        dimmingBytes[offset + 3] = 0; 
+        dimmingBytes[offset + 3] = 0;
 
         // Edge Detection
         bool isEdge = false;
@@ -43,15 +43,19 @@ Map<String, Uint8List> generateLayers(Map<String, dynamic> request) {
         }
 
         if (isEdge) {
-          edgeBytes[offset] = 255; edgeBytes[offset+1] = 255; edgeBytes[offset+2] = 255;
-          edgeBytes[offset + 3] = 255; 
+          edgeBytes[offset] = 255;
+          edgeBytes[offset + 1] = 255;
+          edgeBytes[offset + 2] = 255;
+          edgeBytes[offset + 3] = 255;
         }
       } else {
         // --- BACKGROUND AREA ---
-        dimmingBytes[offset] = 0; dimmingBytes[offset+1] = 0; dimmingBytes[offset+2] = 0;
-        dimmingBytes[offset + 3] = dimAlpha; 
-        
-        edgeBytes[offset + 3] = 0; 
+        dimmingBytes[offset] = 0;
+        dimmingBytes[offset + 1] = 0;
+        dimmingBytes[offset + 2] = 0;
+        dimmingBytes[offset + 3] = dimAlpha;
+
+        edgeBytes[offset + 3] = 0;
       }
     }
   }
