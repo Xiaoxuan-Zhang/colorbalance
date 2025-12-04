@@ -214,11 +214,9 @@ class _ProcessingScreenState extends State<ProcessingScreen> with SingleTickerPr
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
-        child: Center(
           child: isLandscape 
               ? _buildLandscapeLayout(theme, activeColor) 
               : _buildPortraitLayout(theme, activeColor),
-        ),
       ),
     );
   }
@@ -226,15 +224,28 @@ class _ProcessingScreenState extends State<ProcessingScreen> with SingleTickerPr
   // --- RESPONSIVE LAYOUTS ---
 
   Widget _buildPortraitLayout(ThemeData theme, Color activeColor) {
-    return SingleChildScrollView(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+    return Column(
               children: [
-          _buildVisualizer(activeColor),
-          const SizedBox(height: 60),
-          _buildStepList(theme),
-        ],
+        // FIXED ZONE: Visualizer
+        // Using Expanded ensures this takes up the top half and doesn't move
+        // when the list below changes size.
+        Expanded(
+          flex: 5, 
+          child: Center(
+            child: _buildVisualizer(activeColor),
+          ),
+        ),
+        
+        // FLEXIBLE ZONE: Steps List
+        // Aligned to topCenter so it grows downwards, keeping the gap stable.
+        Expanded(
+          flex: 4,
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: _buildStepList(theme),
+          ),
       ),
+      ],
     );
   }
 
