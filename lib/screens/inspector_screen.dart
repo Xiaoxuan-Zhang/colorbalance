@@ -1,15 +1,9 @@
 import 'dart:async';
-import 'dart:io';
-import 'dart:typed_data';
-import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:gallery_saver/gallery_saver.dart';
 
 import '../src/rust/api.dart';
 import '../constants.dart';
@@ -358,6 +352,7 @@ class _GlassButton extends StatelessWidget {
   const _GlassButton({required this.icon, this.label, required this.onTap});
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return GestureDetector(
       onTap: onTap,
       child: ClipRRect(
@@ -367,22 +362,16 @@ class _GlassButton extends StatelessWidget {
           child: Container(
             height: 44,
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            color: Theme.of(
-              context,
-            ).colorScheme.onSurface.withValues(alpha: 0.1),
+            color: theme.colorScheme.onSurface.withOpacity(0.1),
             child: Row(
               children: [
-                Icon(
-                  icon,
-                  color: Theme.of(context).colorScheme.onSurface,
-                  size: 18,
-                ),
+                Icon(icon, color: theme.colorScheme.onSurface, size: 18),
                 if (label != null) ...[
                   const SizedBox(width: 8),
                   Text(
                     label!,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurface,
                     ),
                   ),
                 ],
@@ -424,7 +413,7 @@ class _FloatingHud extends StatelessWidget {
               Text(
                 "SELECTED COLOR",
                 style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  color: Colors.white.withOpacity(0.5),
                   fontSize: 13,
                   letterSpacing: 1.5,
                 ),
@@ -435,24 +424,23 @@ class _FloatingHud extends StatelessWidget {
                 children: [
                   Text(
                     hex.toUpperCase(),
-                    style: theme.textTheme.displayLarge?.copyWith(
-                      color: theme.colorScheme.onSurface,
-                      fontFamily: 'monospace',
+                    // CHANGED: Use Theme Monospace
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: Colors.white,
                       fontSize: 28,
-                      fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(width: 16),
                   Container(
                     width: 2,
                     height: 24,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
+                    color: Colors.white.withOpacity(0.2),
                   ),
                   const SizedBox(width: 16),
                   Text(
                     "${percentage.toStringAsFixed(1)}%",
                     style: theme.textTheme.titleLarge?.copyWith(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.9),
+                      color: Colors.white.withOpacity(0.9),
                       fontSize: 20,
                     ),
                   ),
@@ -648,7 +636,7 @@ class _RippleSwatchState extends State<_RippleSwatch>
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 1.0),
+                            color: Theme.of(context).colorScheme.onSurface,
                             width: borderWidth,
                           ),
                         ),
@@ -748,8 +736,8 @@ class _TechPanelOverlay extends StatelessWidget {
                           const SizedBox(height: 8),
                           Text(
                             colorData.hex.toUpperCase(),
-                            style: theme.textTheme.displayLarge?.copyWith(
-                              fontSize: 32,
+                            // CHANGED: Use standardized Serif header
+                            style: theme.textTheme.displayMedium?.copyWith(
                               color: theme.colorScheme.onSurface,
                             ),
                           ),
@@ -787,7 +775,7 @@ class _TechPanelOverlay extends StatelessWidget {
                     color: theme.colorScheme.primary,
                   ),
                   const SizedBox(height: 20),
-                  const Divider(color: Colors.white10),
+                  Divider(color: theme.colorScheme.onSurface.withOpacity(0.1)),
                   const SizedBox(height: 20),
                   Text("HARMONY", style: theme.textTheme.labelSmall),
                   const SizedBox(height: 16),
@@ -845,10 +833,10 @@ class _DataRow extends StatelessWidget {
           ),
           Text(
             value,
-            style: TextStyle(
+            // CHANGED: Use Theme Monospace
+            style: theme.textTheme.labelLarge?.copyWith(
               color: color,
-              fontFamily: 'monospace',
-              fontSize: 16,
+              fontWeight: FontWeight.normal,
             ),
           ),
         ],

@@ -1,12 +1,13 @@
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+// For toggleTheme()
 import 'processing_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  // --- LOGIC: PICK IMAGE ---
   Future<void> _pickImage(BuildContext context, ImageSource source) async {
     final picker = ImagePicker();
     try {
@@ -24,6 +25,12 @@ class HomeScreen extends StatelessWidget {
       );
     } catch (e) {
       debugPrint("Error picking image: $e");
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to open the image. Please try again.'),
+        ),
+      );
     }
   }
 
@@ -31,13 +38,11 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final isLandscape = size.width > size.height;
-
-    // LINKING TO THEME: Access the global colors defined in main.dart
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
     return Scaffold(
-      // LINKED: Uses the Dark Gray (#1A1A1A) from main.dart
+      // No more hardcoded colors - use the theme!
       backgroundColor: theme.scaffoldBackgroundColor,
       body: Stack(
         fit: StackFit.expand,
@@ -87,8 +92,7 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context, TextAlign align) {
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -98,31 +102,27 @@ class HomeScreen extends StatelessWidget {
       children: [
         Text(
           "COLOR BALANCE",
-          style: textTheme.displayLarge?.copyWith(
-            color: colorScheme.onSurface, // LINKED
-            height: 0.9,
-            fontSize: 28,
-            letterSpacing: 4,
+          // CHANGED: Use standardized Serif header
+          style: theme.textTheme.displayMedium?.copyWith(
             fontWeight: FontWeight.bold,
+            letterSpacing: 4, // Keep the wide spacing for style
           ),
           textAlign: align,
         ),
-        const SizedBox(
-          height: 40,
-        ), // Increased space between header and description
+        const SizedBox(height: 40),
         Text(
           "A digital studio for the modern creative.",
           textAlign: align,
-          style: textTheme.bodyMedium?.copyWith(
-            color: colorScheme.onSurface.withValues(alpha: 0.6), // LINKED
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurface.withOpacity(0.6),
           ),
         ),
-        const SizedBox(height: 4), // Increased space between description
+        const SizedBox(height: 4),
         Text(
           "Extract color harmony from images.",
           textAlign: align,
-          style: textTheme.bodyMedium?.copyWith(
-            color: colorScheme.onSurface.withValues(alpha: 0.6), // LINKED
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurface.withOpacity(0.6),
           ),
         ),
       ],
@@ -130,24 +130,37 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildButtons(BuildContext context) {
+    final isDesktop =
+        !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.macOS ||
+            defaultTargetPlatform == TargetPlatform.windows ||
+            defaultTargetPlatform == TargetPlatform.linux);
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         _buildButton(
           context,
-          label: "Analyze Source",
-          icon: Icons.camera_alt_outlined,
+          label: isDesktop ? "Open Image" : "Analyze Source",
+          icon: isDesktop
+              ? Icons.folder_open_outlined
+              : Icons.camera_alt_outlined,
           isPrimary: true,
-          onTap: () => _pickImage(context, ImageSource.camera),
+          onTap: () => _pickImage(
+            context,
+            isDesktop ? ImageSource.gallery : ImageSource.camera,
+          ),
         ),
-        const SizedBox(height: 16),
-        _buildButton(
-          context,
-          label: "Load from Gallery",
-          icon: Icons.photo_library_outlined,
-          isPrimary: false,
-          onTap: () => _pickImage(context, ImageSource.gallery),
-        ),
+        if (!isDesktop) ...[
+          const SizedBox(height: 16),
+          _buildButton(
+            context,
+            label: "Load from Gallery",
+            icon: Icons.photo_library_outlined,
+            isPrimary: false,
+            onTap: () => _pickImage(context, ImageSource.gallery),
+          ),
+        ],
       ],
     );
   }
@@ -159,26 +172,26 @@ class HomeScreen extends StatelessWidget {
         Positioned(
           top: -100,
           left: -50,
-          // LINKED: Uses primary color for the blob tint
+          // CHANGED: Uses Theme Tertiary (Purple)
           child: Container(
             width: 400,
             height: 400,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: const Color(0xFF4A148C).withValues(alpha: 0.2),
+              color: colors.tertiary.withOpacity(0.2),
             ),
           ),
         ),
         Positioned(
           bottom: -100,
           right: -50,
-          // LINKED: Uses primary color for the blob tint
+          // CHANGED: Uses Theme Primary (Gold)
           child: Container(
             width: 350,
             height: 350,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: colors.primary.withValues(alpha: 0.15),
+              color: colors.primary.withOpacity(0.15),
             ),
           ),
         ),
@@ -202,13 +215,12 @@ class HomeScreen extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
 
     return SizedBox(
-      width: 300, // Wider buttons for better tap target
-      height: 60, // Taller buttons
+      width: 300,
+      height: 60,
       child: isPrimary
           ? FilledButton(
               onPressed: onTap,
               style: FilledButton.styleFrom(
-                // LINKED: Uses Theme Colors
                 backgroundColor: colors.onSurface,
                 foregroundColor: colors.surface,
               ),
@@ -217,11 +229,8 @@ class HomeScreen extends StatelessWidget {
           : OutlinedButton(
               onPressed: onTap,
               style: OutlinedButton.styleFrom(
-                // LINKED: Uses Theme Colors
-                foregroundColor: colors.onSurface.withValues(alpha: 0.6),
-                side: BorderSide(
-                  color: colors.onSurface.withValues(alpha: 0.2),
-                ),
+                foregroundColor: colors.onSurface.withOpacity(0.6),
+                side: BorderSide(color: colors.onSurface.withOpacity(0.2)),
               ),
               child: _buildButtonContent(label, icon),
             ),

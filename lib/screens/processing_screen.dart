@@ -205,18 +205,17 @@ class _ProcessingScreenState extends State<ProcessingScreen>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final isLandscape =
-        MediaQuery.of(context).orientation == Orientation.landscape;
-
-    final activeColor = _isErrorState ? Colors.red : colorScheme.primary;
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    
+    // CHANGED: Use theme error color or primary
+    final activeColor = _isErrorState ? theme.colorScheme.error : theme.colorScheme.primary;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
-        child: isLandscape
-            ? _buildLandscapeLayout(theme, activeColor)
-            : _buildPortraitLayout(theme, activeColor),
+          child: isLandscape 
+              ? _buildLandscapeLayout(theme, activeColor) 
+              : _buildPortraitLayout(theme, activeColor),
       ),
     );
   }
@@ -321,11 +320,7 @@ class _ProcessingScreenState extends State<ProcessingScreen>
                 color: Colors.black.withValues(alpha: 0.6),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.error_outline,
-                size: 60,
-                color: Colors.red,
-              ),
+              child: Icon(Icons.error_outline, size: 60, color: Theme.of(context).colorScheme.error),
             )
           else
             Container(
@@ -373,27 +368,28 @@ class _ProcessingScreenState extends State<ProcessingScreen>
         Text(
           "PROCESSING FAILED",
           style: theme.textTheme.labelLarge?.copyWith(
-            color: Colors.red,
+            color: theme.colorScheme.error, // CHANGED: Theme error color
             letterSpacing: 2,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
+            fontSize: 16
           ),
         ),
         const SizedBox(height: 16),
         Text(
           "We encountered an issue analyzing this image.\nPlease try a different photo.",
           textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurface.withOpacity(0.5) // CHANGED: Theme-aware grey
+          ),
         ),
         const SizedBox(height: 32),
         OutlinedButton(
           onPressed: () => Navigator.pop(context),
           style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.white,
-            side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+            foregroundColor: theme.colorScheme.onSurface,
+            side: BorderSide(color: theme.colorScheme.onSurface.withOpacity(0.2)),
           ),
           child: const Text("Return to Studio"),
-        ),
+        )
       ],
     );
   }
@@ -462,18 +458,17 @@ class _ProcessingScreenState extends State<ProcessingScreen>
                 AnimatedSize(
                   duration: const Duration(milliseconds: 300),
                   child: isActive
-                      ? Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            step.description,
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: activeColor.withValues(alpha: 0.8),
-                              fontStyle: FontStyle.italic,
-                              fontSize: 12,
-                            ),
+                    ? Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          step.description,
+                          style: theme.textTheme.bodySmall?.copyWith( // CHANGED: labelSmall -> bodySmall
+                            color: activeColor.withOpacity(0.8),
+                            fontStyle: FontStyle.italic,
                           ),
-                        )
-                      : const SizedBox.shrink(),
+                        ),
+                      )
+                    : const SizedBox.shrink(),
                 ),
               ],
             ),
